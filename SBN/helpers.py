@@ -1,5 +1,6 @@
 import qiskit as qk
 import numpy as np
+import scipy as sp
 
 def swap_order_i_j(order, i, j):
     """
@@ -55,3 +56,47 @@ def generate_noise_scaled_circuit(qc, lambd = 3):
             raise NotImplementedError("Currently only supports 1 and 2 qubit gates")
     
     return noisy_circuit
+
+def extrapolate_to_zero(meas, lambd, method = 'exponential'):
+    """
+    Extrapolate the data to zero noise level using the provided method
+    :param meas: list of measurements
+    :param lambd: list of noise levels (0 is noiseless, 1 is unscaled circuit)
+    :param method: str method to use for extrapolation
+        'exponential', 'linear', or 'quadratic'
+
+    :return: float extrapolated value at lambda = 0
+    :raise ValueError: if method is not supported
+
+    """    
+
+    if method not in ['exponential', 'linear', 'quadratic']:
+        raise ValueError("Method not supported, use 'exponential', 'linear', or 'quadratic'")
+    
+    def linear(x, a, b):
+        return a * x + b
+    def quadratic(x, a, b, c):
+        return a*x**2 + b*x + c
+    def exponential(x, a, b):
+        return a * np.exp(b*x)
+    
+    f = None
+    if method == 'linear':
+        f = linear
+    elif method == 'quadratic':
+        f = quadratic
+    elif method == 'exponential':
+        f = exponential
+
+    assert f is not None
+
+    params, _, _, _, flag = sp.optimize.curve_fit(f, lambd, meas, full_output=True)
+
+    if flag not in [1, 2, 3, 4]:
+        raise ValueError("Curve fit failed, check your data and method")
+    
+    model = lambda x: f(x, *params)
+
+    return model(0)
+    
+
