@@ -24,6 +24,9 @@ def generate_noise_scaled_circuit(qc, lambd = 3):
     This is done by adding pairs of two-qubits gates and inverse to each
     existing two-qubit gate in the circuit
 
+    Note: this should be called after transpiling the circuit,
+    as the transpiler can optimize the circuit and remove the identity pairs
+
     :raise NotImplementedError: if circuit contains >2 qubit gates.
 
     :param qc: qiskit QuantumCircuit
@@ -98,5 +101,20 @@ def extrapolate_to_zero(meas, lambd, method = 'exponential'):
     model = lambda x: f(x, *params)
 
     return model(0)
+    
+def count_to_probability(count, target_state, shots):
+    """
+    Given a dictionary of counts (from circuit run) and a target state,
+    calculate the probability of measuring the said state
+    This is equivalent to the expectation value of |x><x| for the state x
+    :param count: dict
+        The counts from the circuit run
+    :param target_state: str
+        The target state to measure
+    :param shots: int
+        The number of shots used in the circuit run
+    :return: float
+        The probability of measuring the target state
+    """
     
 
