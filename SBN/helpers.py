@@ -101,20 +101,4 @@ def extrapolate_to_zero(meas, lambd, method = 'exponential'):
     model = lambda x: f(x, *params)
 
     return model(0)
-    
-def count_to_probability(count, target_state, shots):
-    """
-    Given a dictionary of counts (from circuit run) and a target state,
-    calculate the probability of measuring the said state
-    This is equivalent to the expectation value of |x><x| for the state x
-    :param count: dict
-        The counts from the circuit run
-    :param target_state: str
-        The target state to measure
-    :param shots: int
-        The number of shots used in the circuit run
-    :return: float
-        The probability of measuring the target state
-    """
-    
 
