@@ -40,21 +40,21 @@ def generate_noise_scaled_circuit(qc, lambd = 3):
         The scaled circuit
     """
     # Create a new circuit
-    noisy_circuit = qk.QuantumCircuit(qc.num_qubits)
+    noisy_circuit = qk.QuantumCircuit(qc.num_qubits, qc.num_clbits)
 
     for instru in qc.data: # expand into each instruction
         op = instru.operation
         if op.num_qubits == 1: # this is a single qubit gate
             # simply need to copy this to the new circuit
-            noisy_circuit.append(op, instru.qubits)
+            noisy_circuit.append(op, instru.qubits, instru.clbits)
         elif op.num_qubits == 2: # this is a two qubit gate
             # we need to add scaling
             # first make copies in the new circuit
             noisy_circuit.append(op, instru.qubits)
             reps = (lambd - 1) // 2
             for _ in range(reps):
-                noisy_circuit.append(op, instru.qubits)
-                noisy_circuit.append(op.inverse(), instru.qubits)
+                noisy_circuit.append(op, instru.qubits, instru.clbits)
+                noisy_circuit.append(op.inverse(), instru.qubits, instru.clbits)
         else:
             raise NotImplementedError("Currently only supports 1 and 2 qubit gates")
     
@@ -80,8 +80,8 @@ def extrapolate_to_zero(meas, lambd, method = 'exponential'):
         return a * x + b
     def quadratic(x, a, b, c):
         return a*x**2 + b*x + c
-    def exponential(x, a, b):
-        return a * np.exp(b*x)
+    def exponential(x, a, b, c):
+        return a * np.exp(b*x) + c
     
     f = None
     if method == 'linear':
@@ -93,12 +93,17 @@ def extrapolate_to_zero(meas, lambd, method = 'exponential'):
 
     assert f is not None
 
-    params, _, _, _, flag = sp.optimize.curve_fit(f, lambd, meas, full_output=True)
+    params, _, _, _, flag = sp.optimize.curve_fit(f, lambd, meas, full_output=True, maxfev = int(1e5))
 
     if flag not in [1, 2, 3, 4]:
         raise ValueError("Curve fit failed, check your data and method")
     
     model = lambda x: f(x, *params)
 
-    return model(0)
+    fit0 = model(0)
+
+    if fit0 > 3: # we have obviously overfitted
+        raise ValueError("Extrapolation resulted in a value > 3")
+
+    return fit0
 
