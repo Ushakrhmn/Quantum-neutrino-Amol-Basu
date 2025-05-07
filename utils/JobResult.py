@@ -12,7 +12,16 @@ class JobResult(object):
     Provides a straightforward interface to access the counts from a job.
     """
 
-    def __init__(self, service = None, job_id = None, job = None, result = None):
+    def verbose_print(self, message):
+        """
+        Print the message if verbose is set to True
+        :param message: str
+            The message to print
+        """
+        if self.verbose:
+            print(message)
+
+    def __init__(self, service = None, job_id = None, job = None, result = None, verbose = False):
         """
         :param service: the quantum computing service, can be a sampler, estimator, or a simulator
         :param job_id: alternative constructor option, directly provide a job id
@@ -23,6 +32,7 @@ class JobResult(object):
         self.job_id = job_id
         self.job = job
         self.result = result
+        self.verbose = verbose
 
     def default_ibm_service(self, token = "a1a173ef5427a0e110ac33b0fb03add9d211ffae97a6eca6da26474feb765c2b722d2eb2460417c36411e35943f7fe7f2bd1ee2d180cef9d0ee71e180029f770"):
         """
@@ -45,16 +55,21 @@ class JobResult(object):
 
         self.job = self.service.job(self.job_id)
         self.result = self.job.result()
+        return self.result
 
-    def retrieve_result(self):
+    def get_result(self):
         """
         Retrive the job result assuming we have a job object
         this is a blocking call, it will wait until the job is finished
         """
-        if self.job is None:
+        if (self.job is None) and (self.result is None):
             raise ValueError("Job does not exist")
-        self.result = self.job.result()
-        print("Job result retrieved")
+        if self.job is not None:
+            self.result = self.job.result()
+        else:
+            return self.result
+        self.verbose_print("Job result retrieved")
+        return self.result
 
     def save_job_to_file(self, path):
         """
@@ -63,38 +78,38 @@ class JobResult(object):
         :param path: path save location
         """
         if self.job_id is not None:
-            with open(self.job_id+".json", 'w') as f:
+            with open(path+self.job_id+".json", 'w') as f:
                 json.dump(self.job_id, f)
-                print(f"Job ID: {self.job_id} saved to {self.job_id}.json")
+                self.verbose_print(f"Job ID: {self.job_id} saved to {self.job_id}.json")
         
 
         if self.result is not None:
-            with open(self.job_id+"_result.json", 'w') as f:
+            with open(path+self.job_id+"_result.json", 'w') as f:
                 json.dump(self.result, f, cls=RuntimeEncoder)
-                print(f"Job result saved to {self.job_id+"_result.json"}.json")
+                self.verbose_print(f"Job result saved to {self.job_id+"_result.json"}.json")
 
-    def load_result_from_id(self):
+    def load_result_from_id(self, path):
         """
         Will try to load job result from file
         """
         # check is file exists
         if self.job_id is None:
-            raise ValueError("Provide a job id first")
+            raise ValueError("Provide a job id firstW")
         try:
-            with open(self.job_id+".json", 'r') as f:
-                result = json.load(file, cls=RuntimeDecoder)
-                print(f"Job ID: {self.job_id} loaded from {self.job_id}.json")
+            with open(path+self.job_id+"_result.json", 'r') as f:
+                self.result = json.load(f, cls=RuntimeDecoder)
+                self.verbose_print(f"Job ID: {self.job_id} loaded from {self.job_id}._result.json")
         except FileNotFoundError:
-            print(f"Job ID: {self.job_id} not found in {self.job_id}.json")
-            result = None
+            self.verbose_print(f"Job ID: {self.job_id} not found in {self.job_id}.json")
+            self.result = None
 
-    def run_job(self, circuit, run_options):
+    def run(self, circuit, run_options):
         """
         Run the job, does not wait for it to finish
         """
         self.job = self.service.run([circuit], **run_options)
         self.job_id = self.job.job_id()
-        print(f"Job ID: {self.job_id} submitted")
+        self.verbose_print(f"Job ID: {self.job_id} submitted")
     
     def check_job_status(self):
         """
@@ -103,6 +118,8 @@ class JobResult(object):
         if self.job is None:
             raise ValueError("Job does not exist")
         return self.job.status()
+
+    
 
             
 
