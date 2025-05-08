@@ -44,7 +44,7 @@ class DecoherenceRenormalizer(object):
 
     def convert_to_cnot_identity(self, qc):
         """
-        Simplest method to convert an identity circuit from Urbanek et al.
+        Simplest method to convert to an identity circuit from Urbanek et al.
         Remove single qubit gates and replace all two qubits gates with CNOTs
 
         :param circuit: The quantum circuit to convert 
@@ -66,7 +66,7 @@ class DecoherenceRenormalizer(object):
         
         return identity_circuit
     
-    def estimate_error_rate(self, service, shots = 1024):
+    def estimate_error_rate(self, service, shots = 1024, transpile_options = None):
         """
         Estimate the error rate of the identity circuit by running it on the service
         :param service: The service to run the identity circuit on
@@ -77,7 +77,16 @@ class DecoherenceRenormalizer(object):
         
         jr = JobResult(service = service)
 
-        jr.run(self.identity_circuit, {"shots": shots})
+        self.identity_circuit.draw('mpl')
+
+        # make sure there is not optimization, so cnot gates are not removed
+
+        if 'optimization_level' in transpile_options:
+            del transpile_options['optimization_level']
+
+        tqc = qk.compiler.transpile(self.identity_circuit, optimization_level=0, **transpile_options)
+
+        jr.run(tqc, {"shots": shots})
 
         counts = jr.get_counts()
 
@@ -85,8 +94,32 @@ class DecoherenceRenormalizer(object):
         # the circuit only has cnot gates
         # The circuit in ideal case should still have all |0> state
 
-        ecount = counts.get('0'*self.identity_circuit.num_qubits, 0)
+        ecount = 0
 
-        self.rate_estimate = 1 - ecount / shots
+        for key in counts.keys():
+            if int(key) != 0:
+                ecount += counts[key]
+
+        self.rate_estimate = ecount / shots
 
         return self.rate_estimate
+    
+    def renormalize(self, expectation, c=0):
+        """
+        Given an expectation value, renormalize with the estimated error rate per formula
+
+        <O> = (<O>_noisy - c) / (1 - p) + c
+
+        p is the estimated error rate, c is a constant shift factor that by defualt is 0
+
+        Note that for a certain final state |psi>, the probability of measuring the state is the same as
+        the expectation of operator O = |psi><psi|
+
+        :param expectation: The expectation value to renormalize
+        :param c: The constant shift factor 
+        """
+
+        if self.rate_estimate is None:
+            raise ValueError("Error rate is not estimated")
+        
+        return (expectation - c) / (1 - self.rate_estimate) + c
