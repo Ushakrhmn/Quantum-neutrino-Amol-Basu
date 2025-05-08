@@ -34,6 +34,30 @@ class JobResult(object):
         self.result = result
         self.verbose = verbose
 
+    def get_service(self):
+        return self.service
+
+    def set_service(self, service):
+        self.service = service
+
+    def get_job_id(self):
+        return self.job_id
+    
+    def set_job_id(self, job_id):
+        self.job_id = job_id
+    
+    def get_job(self):
+        return self.job
+    
+    def set_job(self, job):
+        self.job = job
+    
+    def get_result(self):
+        return self.result
+    
+    def set_result(self, result):
+        self.result = result
+
     def default_ibm_service(self, token = "a1a173ef5427a0e110ac33b0fb03add9d211ffae97a6eca6da26474feb765c2b722d2eb2460417c36411e35943f7fe7f2bd1ee2d180cef9d0ee71e180029f770"):
         """
         Creates a default ibm service using quantum experience token
@@ -57,7 +81,7 @@ class JobResult(object):
         self.result = self.job.result()
         return self.result
 
-    def get_result(self):
+    def get_result_from_job(self):
         """
         Retrive the job result assuming we have a job object
         this is a blocking call, it will wait until the job is finished
@@ -118,6 +142,25 @@ class JobResult(object):
         if self.job is None:
             raise ValueError("Job does not exist")
         return self.job.status()
+    
+    def get_counts(self):
+        """
+        Get the counts from the job result
+        """
+        if self.result is None:
+            if self.job is None:
+                raise ValueError("Result does not exist")
+            else:
+                self.get_result_from_job()
+
+        count = None
+        
+        try:
+            count = self.result.get_counts()
+        except AttributeError:
+            count = self.result[0].data.c.get_counts()
+        finally:
+            return count
 
     
 
