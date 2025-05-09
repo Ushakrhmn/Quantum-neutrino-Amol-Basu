@@ -107,3 +107,19 @@ def extrapolate_to_zero(meas, lambd, method = 'exponential'):
 
     return fit0
 
+def count_2q(qc):
+    """
+    Count the number of 2q
+
+    :param qc: The quantum circuit to count CNOT gates in.
+    :return: The number of 2q gates in the circuit.
+    """
+    count = 0
+
+    for instru in qc.data: # expand into each instruction
+        op = instru.operation
+        if op.num_qubits == 2: # this is a two qubit gate
+            count += 1
+
+    
+    return count

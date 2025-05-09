@@ -82,6 +82,7 @@ class DecoherenceRenormalizer(object):
         # make sure there is not optimization, so cnot gates are not removed
 
         if 'optimization_level' in transpile_options:
+            transpile_options = transpile_options.copy()
             del transpile_options['optimization_level']
 
         tqc = qk.compiler.transpile(self.identity_circuit, optimization_level=0, **transpile_options)
