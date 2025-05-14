@@ -66,7 +66,7 @@ class DecoherenceRenormalizer(object):
         
         return identity_circuit
     
-    def estimate_error_rate(self, service, shots = 1024, transpile_options = None):
+    def estimate_error_rate(self, service, shots = 1024, transpile_options = None, plan = 3):
         """
         Estimate the error rate of the identity circuit by running it on the service
         :param service: The service to run the identity circuit on
@@ -81,13 +81,19 @@ class DecoherenceRenormalizer(object):
 
         # make sure there is not optimization, so cnot gates are not removed
 
+        transpile_options = transpile_options.copy() if transpile_options is not None else None
+
         if 'optimization_level' in transpile_options:
-            transpile_options = transpile_options.copy()
-            del transpile_options['optimization_level']
+            transpile_options['optimization_level'] = 0
 
-        tqc = qk.compiler.transpile(self.identity_circuit, optimization_level=0, **transpile_options)
+        if 'initial_layout' in transpile_options:
+            del transpile_options['initial_layout']
 
-        jr.run(tqc, {"shots": shots})
+        tqc = qk.compiler.transpile(self.identity_circuit, **transpile_options)
+
+        if plan == 1:
+            jr.run(tqc, {"shots": shots})
+            return None
 
         counts = jr.get_counts()
 
