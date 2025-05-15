@@ -94,6 +94,8 @@ class DecoherenceRenormalizer(object):
         if plan == 1:
             jr.run(tqc, {"shots": shots})
             return None
+        if plan == 3:
+            jr.run(tqc, {"shots": shots})
 
         counts = jr.get_counts()
 
