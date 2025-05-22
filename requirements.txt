@@ -1,6 +1,7 @@
-numpy==2.2.6
-qiskit==1.4.2
-qiskit_ibm_runtime==0.37.0
-quimb==1.11.0
-scipy==1.15.3
+numpy
+qiskit
+qiskit_ibm_runtime
+quimb
+scipy
+qiskit_aer
 
