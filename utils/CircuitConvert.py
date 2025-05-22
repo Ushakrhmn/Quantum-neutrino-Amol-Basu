@@ -35,8 +35,6 @@ def qiskit_to_quimb(qc):
             if op.name == 'x' or op.name == 'sx':
                 qu_circuit.apply_gate(op1_dict[op.name], instru.qubits[0]._index)
             elif op.name == 'rz':
-                print(instru.params)
-                print(instru.qubits)
                 qu_circuit.apply_gate(op1_dict[op.name], instru.params[0], instru.qubits[0]._index)
             else:
                 raise NotImplementedError("Currently only supports X, RZ, SX gates")
