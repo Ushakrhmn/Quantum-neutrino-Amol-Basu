@@ -2,8 +2,9 @@ import qiskit as qk
 from qiskit import QuantumCircuit
 import quimb as qu
 import quimb.tensor as qtn
+import torch
 
-def qiskit_to_quimb(qc):
+def qiskit_to_quimb(qc, backend='numpy'):
     """
     Converts a qiskit QuantumCircuit object
     to a equivalent quimb circuit object
@@ -18,7 +19,7 @@ def qiskit_to_quimb(qc):
 
     :raise NotImplementedError: if circuit contains >2 qubit gates.
     """
-    qu_circuit = qtn.Circuit(qc.num_qubits)
+    qu_circuit = qtn.Circuit(qc.num_qubits, to_backend=torch.tensor)
 
     op1_dict = {
         'x': 'X',
