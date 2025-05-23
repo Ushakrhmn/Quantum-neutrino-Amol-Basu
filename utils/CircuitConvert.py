@@ -19,7 +19,14 @@ def qiskit_to_quimb(qc, backend='numpy'):
 
     :raise NotImplementedError: if circuit contains >2 qubit gates.
     """
-    qu_circuit = qtn.Circuit(qc.num_qubits, to_backend=torch.tensor)
+
+    def to_backend(x):
+        if isinstance(x, torch.Tensor):
+            return x
+        else:
+            return torch.tensor(x, dtype=torch.complex64)
+
+    qu_circuit = qtn.Circuit(qc.num_qubits, to_backend=to_backend)
 
     op1_dict = {
         'x': 'X',
