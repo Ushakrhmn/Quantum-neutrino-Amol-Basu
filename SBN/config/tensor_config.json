@@ -1,0 +1,1 @@
+{"max_repeats": 256, "shots": 8192, "slicing_reconf_opts": {"target_size": 1000000000.0}, "max_time": "rate:1e9", "methods": "labels"}
