@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account=def-nilic 
-#SBATCH --mem=32G               # memory per node
+#SBATCH --mem=64G               # memory per node
 #SBATCH --time=0-24:00:00
 #SBATCH --mail-user=xyz.yu@mail.utoronto.ca
 #SBATCH --mail-type=ALL
