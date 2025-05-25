@@ -1,0 +1,54 @@
+from qiskit import QuantumCircuit
+import numpy as np
+
+def theta_ij(i, j, N):
+    return np.arccos(0.9) * np.abs(i-j) / (N-1)
+
+def J_ij(i, j, E, mu, N):
+    return  mu/(N) * (1 - np.cos(theta_ij(i, j, N))) * 1
+
+def U1_omega_Omega(t, omega, Omega):
+    A = -1 * omega * t
+    B_val = -1 * Omega * t
+    gate = QuantumCircuit(2)
+    gate.rz(A, 0)
+    gate.rz(B_val, 1)
+    return gate.to_gate(label='U1_omega_Omega')
+
+def nunu_interaction(qc, q, alpha):
+    a, b, c, d = q
+    qc.cx(a, c)
+    qc.cx(b, d)
+    qc.ry(np.pi/4, a)
+    qc.ry(np.pi/4, b)
+    qc.cx(c, a)
+    qc.cx(d, b)
+    qc.ry(-np.pi/4, a)
+    qc.ry(-np.pi/4, b)
+    qc.rz(-alpha, c)
+    qc.rz(-alpha, d)
+    qc.cx(a, c)
+    qc.cx(b, d)
+    qc.cx(a, b)
+    qc.rz(-2 * alpha, b)
+    qc.rz(alpha, c)
+    qc.rz(alpha, d)
+    qc.cx(a, b)
+    qc.cx(b, c)
+    qc.rz(alpha, c)
+    qc.cx(a, c)
+    qc.rz(-alpha, c)
+    qc.cx(a, d)
+    qc.cx(b, c)
+    qc.rz(alpha, d)
+    qc.cx(b, d)
+    qc.rz(-alpha, d)
+    qc.cx(a, d)
+    qc.ry(np.pi/4, a)
+    qc.ry(np.pi/4, b)
+    qc.cx(d, b)
+    qc.cx(c, a)
+    qc.ry(-np.pi/4, a)
+    qc.ry(-np.pi/4, b)
+    qc.cx(b, d)
+    qc.cx(a, c)
