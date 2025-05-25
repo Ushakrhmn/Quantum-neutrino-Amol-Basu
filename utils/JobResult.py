@@ -110,7 +110,7 @@ class JobResult(object):
         if self.result is not None:
             with open(path+self.job_id+"_result.json", 'w') as f:
                 json.dump(self.result, f, cls=RuntimeEncoder)
-                self.verbose_print(f"Job result saved to {self.job_id+"_result.json"}.json")
+                self.verbose_print(f"Job result saved to {self.job_id}"+"_result.json".json)
 
     def load_result_from_id(self, path):
         """

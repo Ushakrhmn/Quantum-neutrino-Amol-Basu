@@ -3,3 +3,6 @@
 *.png
 venv/*
 *.pyc
+SBN/circuit.txt
+.gitignore
+.DS_Store
