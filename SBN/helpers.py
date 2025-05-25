@@ -123,3 +123,43 @@ def count_2q(qc):
 
     
     return count
+
+def get_target_state(base_pattern):
+    """
+    Generates target state string from base pattern represented
+    by 'M', 'T', and 'E' characters.
+    """
+
+    target_state = ''.join((base_pattern))
+    # if order[-1] > order[0]:
+        # we are in original order
+    target_state = target_state.replace('M', '01')
+    target_state = target_state.replace('T', '10')
+    target_state = target_state.replace('E', '00')
+    return target_state
+
+def swap_correction_order_bp(order, base_pattern, i, j):
+    """
+    Swap the elements at index i and j in the provided order and base pattern
+    """
+    order = swap_order_i_j(order, i, j)
+    base_pattern = swap_base_pattern_i_j(base_pattern, i, j)
+    return order, base_pattern
+
+def get_interaction_pair_index(N, method = 'default'):
+    """
+    Returns a list of tuples to interact pairs of neutrinos
+
+    :param N: int, number of neutrinos
+    :param method: str
+        The method to use for pairing, can be 'default', 'full', or 'bubble'
+    """
+    if method == 'default':
+        return [(i, j) for i in range(N) for j in range(i+1, N)]
+    elif method == 'bubble':
+        pair_indices = []
+        for j in range(N):
+            nmj = N - j - 1
+            for i in range(nmj):
+                pair_indices.append((i, i+1))
+        return pair_indices
