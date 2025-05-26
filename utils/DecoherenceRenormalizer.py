@@ -11,12 +11,13 @@ class DecoherenceRenormalizer(object):
     """
     A class that implements decoherence renormalization error mitigation from https://arxiv.org/pdf/2103.08591
     """
-    def __init__(self, quantum_circuit):
+    def __init__(self, quantum_circuit, verbose = False):
         """
         :param quantum_circuit: If provided at construction, the identity circuit will be generated
         """
         self.identity_circuit = None
         self.rate_estimate = None
+        self.verbose = verbose
 
         if quantum_circuit is not None:
             self.identity_circuit = self.convert_to_cnot_identity(quantum_circuit)
@@ -75,9 +76,10 @@ class DecoherenceRenormalizer(object):
         if self.identity_circuit is None:
             raise ValueError("Identity circuit is not set")
         
-        jr = JobResult(service = service)
-
-        self.identity_circuit.draw('mpl')
+        if self.verbose:
+            print("Estimating error rate with {} shots".format(shots))
+        
+        jr = JobResult(service = service, verbose = self.verbose)
 
         # make sure there is not optimization, so cnot gates are not removed
 
@@ -98,6 +100,9 @@ class DecoherenceRenormalizer(object):
             jr.run(tqc, {"shots": shots})
 
         counts = jr.get_counts()
+
+        if self.verbose:
+            print("Got counts for identity run.")
 
         # Since the circuit is intialized to all |0> state,
         # the circuit only has cnot gates
