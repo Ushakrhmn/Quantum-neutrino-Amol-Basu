@@ -1,4 +1,4 @@
-from qiskit_ibm_runtime.fake_provider import FakeSherbrooke, FakeFez
+from qiskit_ibm_runtime.fake_provider import FakeSherbrooke, FakeFez, FakeMarrakesh
 from qiskit_aer import AerSimulator
 from qiskit_ibm_runtime import SamplerV2 as Sampler
 from qiskit_ibm_runtime import QiskitRuntimeService
@@ -36,6 +36,13 @@ def get_sampler(backend='aer', method='automatic'):
     elif backend == 'fez':
         print("Using Noisy Fez simulator")
         fake = FakeFez()
+        simulator = AerSimulator(method=method).from_backend(fake)
+        sampler = Sampler(simulator)
+        config = fake.configuration()
+        return sampler, simulator, config
+    elif backend == 'marrakesh':
+        print("Using Noisy Marrakesh simulator")
+        fake = FakeMarrakesh()
         simulator = AerSimulator(method=method).from_backend(fake)
         sampler = Sampler(simulator)
         config = fake.configuration()
