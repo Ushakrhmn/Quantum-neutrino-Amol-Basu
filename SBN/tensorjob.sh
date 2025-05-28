@@ -6,10 +6,10 @@
 #SBATCH --mail-type=ALL
 #SBATCH --gpus-per-node=1
 
-module load StdEnv/2023 gcc python/3.11 symengine/0.11.2
+module load StdEnv/2023 gcc python/3.11 symengine/0.11.2 boost
 
 nvidia-smi
 
 source ~/ENV/bin/activate
 
-python SNB_3flavour_20-neutrino_2407_tensor.py
+python baseline_tensor.py
