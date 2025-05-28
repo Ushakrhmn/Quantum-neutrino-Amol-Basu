@@ -50,3 +50,47 @@ accelerating by cuStateVec library of NVIDIA can be enabled, the flag is ignored
 ### Using Qiskit on Compute Canada
 
 Refer to https://docs.alliancecan.ca/wiki/Qiskit/fr
+
+### Installing KaHyPar (on Compute Canada)
+
+KaHyPar is a package that is heavily used by quimb + cotengra for optimizing contraction path on tensor networks, the package is found here https://github.com/kahypar/kahypar.
+
+Unfortunately, pip install for kahypar does not work on Graham (I don't know why), therefore, here is a guide to installation.
+
+First load the modules
+
+    module load StdEnv/2023 gcc python/3.11 symengine/0.11.2
+
+This was from the qiskit guide, just to be safe. Then load boost
+
+    module load boost
+
+This is a necessary dependency for KaHyPar. Now, source into the virtual environment, for example
+
+    source ~/ENV/bin/activate
+
+Now follow the full instruction for installing KaHyPar python interfact on https://github.com/kahypar/kahypar#the-python-interface, stop before the last step 5 of copying
+
+Run on terminal
+
+    python -c "import site; print(site.getsitepackages()[0])"
+
+This should give you a path like
+
+    /home/<username>/ENV/lib/python3.11/site-packages
+
+Now make sure you are still in the correct directory,
+
+    <parent dir>/kahypar/build/python
+
+where the kahypar.<version>.so is present. Finally put
+
+    cp kahypar.<version>.so ~/ENV/lib/python3.11/site-packages/kahypar.so
+
+This should complete installation. To verify install, type
+
+    python -c "import kahypar; print(kahypar)"
+
+If this does not give you a ModuleNotFoundError, then KaHyPar should be successfully installed.
+
+
