@@ -57,16 +57,6 @@ class JobResult(object):
     
     def set_result(self, result):
         self.result = result
-
-    def default_ibm_service(self, token = "a1a173ef5427a0e110ac33b0fb03add9d211ffae97a6eca6da26474feb765c2b722d2eb2460417c36411e35943f7fe7f2bd1ee2d180cef9d0ee71e180029f770"):
-        """
-        Creates a default ibm service using quantum experience token
-        """
-        self.service = QiskitRuntimeService(
-            channel='ibm_quantum',
-            instance='ibm-q/open/main',
-            token='***'
-        )
     
     def retrieve_result_with_id(self):
         """
@@ -139,9 +129,23 @@ class JobResult(object):
         """
         Check the job status
         """
+        if self.job is None and self.job_id is None:
+            raise ValueError("No Job or ID found.")
         if self.job is None:
-            raise ValueError("Job does not exist")
-        return self.job.status()
+            return self.service.job(self.job_id).status()
+        else:
+            return self.job.status()
+        
+    def load_job_from_id(self):
+        """
+        Load the job from clodu service with the job id
+        """
+        if self.job_id is None:
+            raise ValueError("Job ID does not exist")
+        
+        self.job = self.service.job(self.job_id)
+        self.verbose_print(f"Job ID: {self.job_id} loaded")
+        return self.job
     
     def get_counts(self):
         """

@@ -93,11 +93,7 @@ class DecoherenceRenormalizer(object):
 
         tqc = qk.compiler.transpile(self.identity_circuit, **transpile_options)
 
-        if plan == 1:
-            jr.run(tqc, {"shots": shots})
-            return None
-        if plan == 3:
-            jr.run(tqc, {"shots": shots})
+        jr.run(tqc, {"shots": shots})
 
         counts = jr.get_counts()
 
@@ -117,6 +113,64 @@ class DecoherenceRenormalizer(object):
         self.rate_estimate = ecount / shots
 
         return self.rate_estimate
+    
+    def estimate_error_rate_from_counts(self, counts):
+        """
+        Estimate the error rate from the counts of the identity circuit
+        :param counts: The counts of the identity circuit
+        :param shots: The number of shots used to get the counts
+
+        :return: The estimated error rate
+        """
+        if self.verbose:
+            print("Estimating error rate from counts")
+
+        ecount = 0
+
+        shots = 0
+
+        for key in counts.keys():
+            shots += counts[key]
+            if int(key) != 0:
+                ecount += counts[key]
+
+        self.rate_estimate = ecount / shots
+
+        return self.rate_estimate
+    
+    def estimate_error_rate_no_wait(self, service, shots = 1024, transpile_options = None):
+        """
+        Estimate the error rate of the identity circuit, submitting the job to the service
+        Does not wait for the job to finish and does not return an estimated rate.
+
+        :param service: The service to run the identity circuit on
+        :param shots: The number of shots to run
+
+        :return: the job id of the submitted job
+        """
+        if self.identity_circuit is None:
+            raise ValueError("Identity circuit is not set")
+        
+        if self.verbose:
+            print("Estimating error rate with {} shots".format(shots))
+        
+        jr = JobResult(service = service, verbose = self.verbose)
+
+        # make sure there is not optimization, so cnot gates are not removed
+
+        transpile_options = transpile_options.copy() if transpile_options is not None else None
+
+        if 'optimization_level' in transpile_options:
+            transpile_options['optimization_level'] = 0
+
+        if 'initial_layout' in transpile_options:
+            del transpile_options['initial_layout']
+
+        tqc = qk.compiler.transpile(self.identity_circuit, **transpile_options)
+
+        jr.run(tqc, {"shots": shots})
+
+        return jr.get_job_id()
     
     def renormalize(self, expectation, c=0):
         """

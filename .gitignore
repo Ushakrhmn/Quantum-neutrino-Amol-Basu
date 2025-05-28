@@ -6,3 +6,4 @@ venv/*
 SBN/circuit.txt
 .gitignore
 .DS_Store
+SBN/logs/*

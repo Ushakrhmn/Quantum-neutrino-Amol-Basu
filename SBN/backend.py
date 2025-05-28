@@ -19,10 +19,17 @@ def get_sampler(backend='aer', method='automatic'):
         print("Using Noiseless Aer")
         simulator = AerSimulator(method=method)
         return Sampler(simulator), simulator, None
-    elif backend == 'ibm':
+    elif backend == 'ibm_sherbrooke':
         print("Using IBM Sherbrooke backend")
         service = QiskitRuntimeService()
         backend = service.backend('ibm_sherbrooke')
+        sampler = Sampler(backend)
+        config = backend.configuration()
+        return sampler, backend, config
+    elif backend == 'ibm_torino':
+        print("Using IBM Torino backend")
+        service = QiskitRuntimeService()
+        backend = service.backend('ibm_torino')
         sampler = Sampler(backend)
         config = backend.configuration()
         return sampler, backend, config
