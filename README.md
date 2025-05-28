@@ -46,3 +46,7 @@ It is possible to check the list of available devices by using
 accelerating by cuStateVec library of NVIDIA can be enabled, the flag is ignored if support does not exist (thus should be safe to use)
 
     cuStateVec_enable = True
+
+### Using Qiskit on Compute Canada
+
+Refer to https://docs.alliancecan.ca/wiki/Qiskit/fr
