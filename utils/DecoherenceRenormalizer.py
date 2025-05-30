@@ -90,7 +90,7 @@ class DecoherenceRenormalizer(object):
         
         return identity_circuit
     
-    def estimate_error_rate(self, service, shots = 1024, transpile_options = None, plan = 3):
+    def estimate_error_rate(self, service, shots = 1024, transpile_options = None):
         """
         Estimate the error rate of the identity circuit by running it on the service
         :param service: The service to run the identity circuit on
@@ -161,6 +161,31 @@ class DecoherenceRenormalizer(object):
 
         return self.rate_estimate
     
+    def estimate_error_rate_from_counts_by_criteria(self, counts, criteria):
+        """
+        Estimate the error rate from the counts of the identity circuit
+        :param counts: The counts of the identity circuit
+        :param shots: The number of shots used to get the counts
+        :param criteria: A callable function that takes a key and returns True if the key is expected, False if error occured
+
+        :return: The estimated error rate
+        """
+        if self.verbose:
+            print("Estimating error rate from counts by criteria")
+
+        ecount = 0
+
+        shots = 0
+
+        for key in counts.keys():
+            shots += counts[key]
+            if not criteria(key):
+                ecount += counts[key]
+
+        self.rate_estimate = ecount / shots
+
+        return self.rate_estimate
+    
     def estimate_error_rate_no_wait(self, service, shots = 1024, transpile_options = None):
         """
         Estimate the error rate of the identity circuit, submitting the job to the service
@@ -217,4 +242,4 @@ class DecoherenceRenormalizer(object):
             corre_val = (expectation - c) / (1 - self.rate_estimate) + c
         except ZeroDivisionError:
             warnings.warn("Error rate is 1, returning expectation value as is.")
-        return expectation
+        return corre_val

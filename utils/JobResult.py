@@ -147,6 +147,18 @@ class JobResult(object):
         self.verbose_print(f"Job ID: {self.job_id} loaded")
         return self.job
     
+    def get_estimator_result(self):
+        """
+        Get the estimator result fromm the job result
+        """
+        if self.result is None:
+            if self.job is None:
+                raise ValueError("Result does not exist")
+            else:
+                self.get_result_from_job()
+        
+        return self.result[0].data.evs
+    
     def get_counts(self):
         """
         Get the counts from the job result
