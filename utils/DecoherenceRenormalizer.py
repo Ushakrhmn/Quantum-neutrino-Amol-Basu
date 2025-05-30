@@ -4,6 +4,7 @@ A module that implements decoherence renormalization error mitigation from https
 
 import numpy as np
 import qiskit as qk
+import warnings
 
 from JobResult import JobResult
 
@@ -20,7 +21,8 @@ class DecoherenceRenormalizer(object):
         self.verbose = verbose
 
         if quantum_circuit is not None:
-            self.identity_circuit = self.convert_to_cnot_identity(quantum_circuit)
+            # self.identity_circuit = self.convert_to_cnot_identity(quantum_circuit)
+            self.identity_circuit = self.convert_to_cz_identity(quantum_circuit)
     
     def set_identity_circuit(self, quantum_circuit):
         """
@@ -62,6 +64,27 @@ class DecoherenceRenormalizer(object):
                     pass
             elif op.num_qubits == 2: # this is a two qubit gate
                 identity_circuit.append(qk.circuit.library.CXGate(), instru.qubits)
+            else:
+                raise NotImplementedError("Currently only supports 1 and 2 qubit gates")
+        
+        return identity_circuit
+    
+    def convert_to_cz_identity(self, qc):
+        """
+        This is relevant for IBM torino or other computers with Heron r1 process, native gate CZ
+        """
+        identity_circuit = qk.QuantumCircuit(qc.num_qubits, qc.num_clbits)
+
+        for instru in qc.data: # expand into each instruction
+            op = instru.operation
+            if op.num_qubits == 1: # this is a single qubit gate
+                # we only keep measurements
+                if op.name == 'measure':
+                    identity_circuit.append(op, instru.qubits, instru.clbits)
+                else:
+                    pass
+            elif op.num_qubits == 2: # this is a two qubit gate
+                identity_circuit.append(qk.circuit.library.CZGate(), instru.qubits)
             else:
                 raise NotImplementedError("Currently only supports 1 and 2 qubit gates")
         
@@ -190,4 +213,8 @@ class DecoherenceRenormalizer(object):
         if self.rate_estimate is None:
             raise ValueError("Error rate is not estimated")
         
-        return (expectation - c) / (1 - self.rate_estimate) + c
+        try:
+            corre_val = (expectation - c) / (1 - self.rate_estimate) + c
+        except ZeroDivisionError:
+            warnings.warn("Error rate is 1, returning expectation value as is.")
+        return expectation
