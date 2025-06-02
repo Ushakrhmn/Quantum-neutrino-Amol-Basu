@@ -57,7 +57,7 @@ def get_sampler(backend='aer', method='automatic'):
     else:
         raise ValueError(f"Unknown backend: {backend}. Choose from 'aer', 'sherbrooke', 'fez', or 'ibm'.")
     
-def get_estimator(backend='aer', method='automatic'):
+def get_estimator(backend='aer', method='automatic', resilience=2):
     """
     Returns an EstimatorV2 of the specific type
     :param backend: The type of backend, one of:
@@ -77,14 +77,14 @@ def get_estimator(backend='aer', method='automatic'):
         print("Using IBM Sherbrooke backend")
         service = QiskitRuntimeService()
         backend = service.backend('ibm_sherbrooke')
-        estimator = EstimatorV2(backend)
+        estimator = EstimatorV2(backend, options={"resilience_level": resilience})
         config = backend.configuration()
         return estimator, backend, config
     elif backend == 'ibm_torino':
         print("Using IBM Torino backend")
         service = QiskitRuntimeService()
         backend = service.backend('ibm_torino')
-        estimator = EstimatorV2(backend)
+        estimator = EstimatorV2(backend, options={"resilience_level": resilience})
         config = backend.configuration()
         return estimator, backend, config
     elif backend == 'sherbrooke':
