@@ -4,7 +4,7 @@ import quimb as qu
 import quimb.tensor as qtn
 import torch
 
-def qiskit_to_quimb(qc, backend='numpy'):
+def qiskit_to_quimb(qc, backend='numpy', device='cpu'):
     """
     Converts a qiskit QuantumCircuit object
     to a equivalent quimb circuit object
@@ -24,7 +24,7 @@ def qiskit_to_quimb(qc, backend='numpy'):
         if isinstance(x, torch.Tensor):
             return x
         else:
-            return torch.tensor(x, dtype=torch.complex64)
+            return torch.tensor(x, dtype=torch.complex64, device=device)
 
     qu_circuit = qtn.CircuitMPS(qc.num_qubits, to_backend=to_backend)
 
