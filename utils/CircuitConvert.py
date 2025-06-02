@@ -26,7 +26,7 @@ def qiskit_to_quimb(qc, backend='numpy', device='cpu'):
         else:
             return torch.tensor(x, dtype=torch.complex64, device=device)
 
-    qu_circuit = qtn.CircuitMPS(qc.num_qubits, to_backend=to_backend)
+    qu_circuit = qtn.CircuitMPS(qc.num_qubits, to_backend=to_backend, cutoff=1e-8)
 
     op1_dict = {
         'x': 'X',
