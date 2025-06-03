@@ -5,6 +5,7 @@ A module that implements decoherence renormalization error mitigation from https
 import numpy as np
 import qiskit as qk
 import warnings
+import mthree
 
 from JobResult import JobResult
 
@@ -19,11 +20,41 @@ class DecoherenceRenormalizer(object):
         self.identity_circuit = None
         self.rate_estimate = None
         self.verbose = verbose
+        self.trace = None
 
         if quantum_circuit is not None:
             # self.identity_circuit = self.convert_to_cnot_identity(quantum_circuit)
             self.identity_circuit = self.convert_to_cz_identity(quantum_circuit)
+
+    def set_trace(self, trace):
+        """
+        Sets the trace of the observable tr(O)
+        """
+        self.trace = trace
+
+    def get_trace(self):
+        """
+        Returns the trace of the observable tr(O)
+        :return: The trace of the observable
+        """
+        if self.trace is None:
+            raise ValueError("Trace is not set")
+        return self.trace
     
+    def set_trace_by_statevector(self, statevector):
+        """
+        Set trace by computing the trace of the outer produce of a given statevector
+        This is the trace of the projection operator onto the final state.
+
+        For some statevector,
+
+        tr(|x><x|) = sum_{i=1}^n (vv^dagger)_{ii} = |x|^2
+        """
+
+        self.trace = np.linalg.norm(statevector)**2
+
+        return self.trace
+
     def set_identity_circuit(self, quantum_circuit):
         """
         Converts a quantum circuit to an identity circuit and bind it to this object
@@ -90,7 +121,7 @@ class DecoherenceRenormalizer(object):
         
         return identity_circuit
     
-    def estimate_error_rate(self, service, shots = 1024, transpile_options = None):
+    def estimate_error_rate(self, service, shots = 8192, transpile_options = None, use_m3 = True, backend = None):
         """
         Estimate the error rate of the identity circuit by running it on the service
         :param service: The service to run the identity circuit on
@@ -116,9 +147,21 @@ class DecoherenceRenormalizer(object):
 
         tqc = qk.compiler.transpile(self.identity_circuit, **transpile_options)
 
+        if use_m3:
+            if self.verbose:
+                print("DR is using mthree for error mitigation")
+            mapping = mthree.utils.final_measurement_mapping(tqc)
+    
+            mit = mthree.M3Mitigation(backend)
+
+            mit.cals_from_system(mapping)
+
         jr.run(tqc, {"shots": shots})
 
         counts = jr.get_counts()
+
+        if use_m3:
+            counts = mit.apply_correction(counts, mapping).nearest_probability_distribution()
 
         if self.verbose:
             print("Got counts for identity run.")
@@ -133,7 +176,10 @@ class DecoherenceRenormalizer(object):
             if int(key) != 0:
                 ecount += counts[key]
 
-        self.rate_estimate = ecount / shots
+        if not use_m3:
+            self.rate_estimate = ecount / shots
+        else: 
+            self.rate_estimate = ecount / sum(counts.values())
 
         return self.rate_estimate
     
