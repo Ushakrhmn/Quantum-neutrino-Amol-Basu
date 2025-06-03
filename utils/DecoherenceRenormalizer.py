@@ -310,7 +310,7 @@ class DecoherenceRenormalizer(object):
 
         counts = {}
 
-        n_run = 8
+        n_run = 1
         small_shots = shots // n_run
 
         random.seed(42)
