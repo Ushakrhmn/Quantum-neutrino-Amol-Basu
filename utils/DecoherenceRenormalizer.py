@@ -6,8 +6,16 @@ import numpy as np
 import qiskit as qk
 import warnings
 import mthree
+import random
+
+from sympy import N
 
 from JobResult import JobResult
+
+import sys
+
+sys.path.append("../SBN")
+from helpers import count_1q
 
 class DecoherenceRenormalizer(object):
     """
@@ -24,7 +32,7 @@ class DecoherenceRenormalizer(object):
 
         if quantum_circuit is not None:
             # self.identity_circuit = self.convert_to_cnot_identity(quantum_circuit)
-            self.identity_circuit = self.convert_to_cz_identity(quantum_circuit)
+            self.identity_circuit = self.convert_to_cnot_identity_with_some_1q(quantum_circuit)
 
     def set_trace(self, trace):
         """
@@ -121,7 +129,174 @@ class DecoherenceRenormalizer(object):
         
         return identity_circuit
     
-    def estimate_error_rate(self, service, shots = 8192, transpile_options = None, use_m3 = True, backend = None):
+    def _append_1q(self, qc, i, gate_name):
+        if gate_name == 'I':
+            pass
+        elif gate_name == 'X':
+            qc.x(i)
+        elif gate_name == 'Y':
+            qc.y(i)
+        elif gate_name == 'Z':
+            qc.z(i)
+
+    def _count_1q_before(self, qc, op_idx, qubit_idx0, qubit_idx1):
+
+        pos0check = False
+        pos1check = False
+
+        p0prev, p1prev = False, False
+
+        count = 0
+
+        i = op_idx - 1
+        while pos0check is False or pos1check is False:
+            try:
+                op = qc.data[i].operation
+                instru = qc.data[i]
+
+                if op.num_qubits == 2:
+                    q0, q1 = instru.qubits[0]._index, instru.qubits[1]._index
+                    # we have reached the next two qubit gate
+                    if q0 == qubit_idx0 or q1 == qubit_idx0:
+                        pos0check = True
+                    elif q0 == qubit_idx1 or q1 == qubit_idx1:
+                        pos1check = True
+                elif op.num_qubits == 1:
+                    q0 = instru.qubits[0]._index
+                    if q0 == qubit_idx0 and pos0check is False:
+                        if p0prev is False:
+                            p0prev = True
+                        else:
+                            pos0check = True
+                            count += 1
+                    elif q0 == qubit_idx1 and pos1check is False:
+                        if p1prev is False:
+                            p1prev = True
+                        else:
+                            pos1check = True
+                            count += 1
+            except IndexError:
+                # we have reached the beginning of the circuit
+                break
+
+            i -= 1
+
+        return count
+    
+    def _count_1q_after(self, qc, op_idx, qubit_idx0, qubit_idx1):
+        
+        pos0check = False
+        pos1check = False
+        p0prev, p1prev = False, False
+        count = 0
+        i = op_idx + 1
+        while pos0check is False or pos1check is False:
+            try:
+                op = qc.data[i].operation
+                instru = qc.data[i]
+
+                if op.num_qubits == 2:
+                    q0, q1 = instru.qubits[0]._index, instru.qubits[1]._index
+                    # we have reached the next two qubit gate
+                    if q0 == qubit_idx0 or q1 == qubit_idx0:
+                        pos0check = True
+                    elif q0 == qubit_idx1 or q1 == qubit_idx1:
+                        pos1check = True
+                elif op.num_qubits == 1:
+                    q0 = instru.qubits[0]._index
+                    if q0 == qubit_idx0 and pos0check is False:
+                        if p0prev is False:
+                            p0prev = True
+                        else:
+                            pos0check = True
+                            count += 1
+                    elif q0 == qubit_idx1 and pos1check is False:
+                        if p1prev is False:
+                            p1prev = True
+                        else:
+                            pos1check = True
+                            count += 1
+            except IndexError:
+                # we have reached the end of the circuit
+                break
+
+            i += 1
+
+        return count
+
+
+    def convert_to_cnot_identity_with_some_1q(self, qc):
+        """
+        This is relevant for IBM torino or other computers with Heron r1 process, native gate CZ
+        """
+
+        libI = [
+            ('I', 'I', 'I', 'I'),
+        ]
+
+        lib2 = [
+            ('I', 'X', 'I', 'X'),
+            ('I', 'Y', 'I', 'Y'),
+            ('I', 'Z', 'Z', 'Z'),
+            ('Z', 'I', 'Z', 'I'),
+        ]
+
+        lib3 = [
+            ('Y', 'I', 'Y', 'X'),
+            ('Y', 'X', 'Y', 'I'),
+            ('X', 'I', 'X', 'X'),
+            ('X', 'X', 'X', 'I'),
+            ('Z', 'Y', 'I', 'Y'),
+            ('Z', 'Z', 'I', 'Z'),
+
+        ]
+
+        lib4 = [
+            ('Y', 'Y', 'X', 'Z'),
+            ('Y', 'Z', 'X', 'Y'),
+            ('X', 'Y', 'Y', 'Z'),
+            ('X', 'Z', 'Y', 'Y'),
+            ('Z', 'X', 'Z', 'X'),
+        ]
+
+        identity_circuit = qk.QuantumCircuit(qc.num_qubits, qc.num_clbits)
+
+        mc = 0
+
+        for op_idx, instru in enumerate(qc.data): # expand into each instruction
+            op = instru.operation
+            if op.num_qubits == 1: # this is a single qubit gate
+                # we only keep measurements
+                if op.name == 'measure':
+                    identity_circuit.append(op, instru.qubits, instru.clbits)
+                else:
+                    pass
+            elif op.num_qubits == 2: # this is a two qubit gate
+                mc += 1
+                adj_1q = self._count_1q_before(qc, op_idx, instru.qubits[0]._index, instru.qubits[1]._index) + self._count_1q_after(qc, op_idx, instru.qubits[0]._index, instru.qubits[1]._index)
+                library = None
+                if adj_1q == 0 or adj_1q == 1: # no 1q gates or only one 1q gate
+                    identity_circuit.append(qk.circuit.library.CXGate(), instru.qubits)
+                else: # we include some 1q gates with it, see method in 2103.08591
+                    if adj_1q == 2:
+                        library = lib2
+                    elif adj_1q == 3:
+                        library = libI
+                    elif adj_1q == 4:
+                        library = libI
+
+                    pattern = random.choice(library)
+                    self._append_1q(identity_circuit, instru.qubits[0]._index, pattern[0])
+                    self._append_1q(identity_circuit, instru.qubits[1]._index, pattern[1])
+                    identity_circuit.append(qk.circuit.library.CXGate(), instru.qubits)
+                    self._append_1q(identity_circuit, instru.qubits[0]._index, pattern[2])
+                    self._append_1q(identity_circuit, instru.qubits[1]._index, pattern[3])
+            else:
+                raise NotImplementedError("Currently only supports 1 and 2 qubit gates")
+        print("Number of two qubit gates checked by identity maker: {}".format(mc))
+        return identity_circuit
+    
+    def estimate_error_rate(self, service, shots = 65536, transpile_options = None, use_m3 = True, backend = None):
         """
         Estimate the error rate of the identity circuit by running it on the service
         :param service: The service to run the identity circuit on
@@ -132,7 +307,45 @@ class DecoherenceRenormalizer(object):
         
         if self.verbose:
             print("Estimating error rate with {} shots".format(shots))
-        
+
+        counts = {}
+
+        n_run = 8
+        small_shots = shots // n_run
+
+        random.seed(42)
+
+        for ir in range(n_run):
+            print("Running identity circuit run {}/{}".format(ir + 1, n_run))
+            temp_count = self._run_identity_circuit(service, small_shots, transpile_options, use_m3, backend)
+            for key in temp_count.keys():
+                if key in counts:
+                    counts[key] += temp_count[key]
+                else:
+                    counts[key] = temp_count[key]
+
+        if self.verbose:
+            print("Got counts for identity run.")
+
+        # Since the circuit is intialized to all |0> state,
+        # the circuit only has cnot gates
+        # The circuit in ideal case should still have all |0> state
+
+        ecount = 0
+
+        for key in counts.keys():
+            if int(key) != 0:
+                ecount += counts[key]
+
+        # @FIXME need to change shots in case shots % n_run != 0
+        if not use_m3:
+            self.rate_estimate = ecount / shots
+        else: 
+            self.rate_estimate = ecount / sum(counts.values())
+
+        return self.rate_estimate
+
+    def _run_identity_circuit(self, service, shots, transpile_options, use_m3, backend):
         jr = JobResult(service = service, verbose = self.verbose)
 
         # make sure there is not optimization, so cnot gates are not removed
@@ -162,26 +375,7 @@ class DecoherenceRenormalizer(object):
 
         if use_m3:
             counts = mit.apply_correction(counts, mapping).nearest_probability_distribution()
-
-        if self.verbose:
-            print("Got counts for identity run.")
-
-        # Since the circuit is intialized to all |0> state,
-        # the circuit only has cnot gates
-        # The circuit in ideal case should still have all |0> state
-
-        ecount = 0
-
-        for key in counts.keys():
-            if int(key) != 0:
-                ecount += counts[key]
-
-        if not use_m3:
-            self.rate_estimate = ecount / shots
-        else: 
-            self.rate_estimate = ecount / sum(counts.values())
-
-        return self.rate_estimate
+        return counts
     
     def estimate_error_rate_from_counts(self, counts):
         """

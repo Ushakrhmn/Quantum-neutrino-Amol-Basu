@@ -121,7 +121,22 @@ def count_2q(qc):
         if op.num_qubits == 2: # this is a two qubit gate
             count += 1
 
-    
+    return count
+
+def count_1q(qc):
+    """
+    Count the number of 1q gates
+
+    :param qc: The quantum circuit to count CNOT gates in.
+    :return: The number of 1q gates in the circuit.
+    """
+    count = 0
+
+    for instru in qc.data: # expand into each instruction
+        op = instru.operation
+        if op.num_qubits == 1: # this is a two qubit gate
+            count += 1
+
     return count
 
 def get_target_state(base_pattern):
