@@ -4,6 +4,8 @@
 #SBATCH --time=0-00:15:00
 #SBATCH --gpus-per-node=1
 
-source load_module.sh
+source env.sh
 
-python test.py
+nvidia-smi
+
+python simple_circuit.py
