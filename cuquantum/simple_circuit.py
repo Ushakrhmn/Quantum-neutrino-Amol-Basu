@@ -3,10 +3,32 @@ Demonstration / Test for using cuquantum tensor network to simulate a simple qis
 """
 
 import qiskit as qk
+
+# to remove the +computecanada postfix in version number, which cause error
+import importlib.metadata
+
+# Save original version
+_real_version = importlib.metadata.version
+
+# Define patch
+def patched_version(pkg_name):
+    if pkg_name == "qiskit":
+        return _real_version(pkg_name).split("+")[0]
+    return _real_version(pkg_name)
+
+# Apply patch
+importlib.metadata.version = patched_version
+
 import numpy as np
 from matplotlib import pyplot as plt
 
-from cuquantum import tensornet as tn
+import warnings
+warnings.filterwarnings("ignore")
+
+# Suppress the warning from importing cuquantum
+from cuquantum import cutensornet as tn
+
+warnings.resetwarnings()
 
 # ------
 # Define a simple circuit
@@ -18,7 +40,7 @@ qc.cx(0, 1)
 
 # ------
 # Convert the circuit to a cuquantum tensor network
-converter = tn.CircuitToEinsum(qc, dypte='complex128')
+converter = tn.CircuitToEinsum(qc)
 # ------
 
 # ------
