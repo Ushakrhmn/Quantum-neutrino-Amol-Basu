@@ -245,4 +245,5 @@ plt.plot(adaptive_l_table, prob[-1, :], color='blue')
 plt.xlabel("L")
 plt.ylabel(r"$P_{\nu_e}$")
 
-plt.savefig("test.png")
+# plt.savefig("test.png")
+plt.savefig(f"nunu_{n_qubits}.png")
