@@ -46,7 +46,7 @@ import warnings
 # warnings.filterwarnings("ignore")
 
 # Suppress the warning from importing cuquantum
-# from cuquantum import cutensornet as tn
+from cuquantum import cutensornet as tn
 
 # warnings.resetwarnings()
 
@@ -59,7 +59,7 @@ Set up to evaluate classical solution for nunubar
 import numpy as np
 
 L          = 0.5
-t_steps    = 5
+t_steps    = 128
 theta      = np.pi/2 - 0.2
 dmsq       = 1.0
 initial_state = ['e'] * args.e + ['mu'] * args.m
