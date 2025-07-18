@@ -11,40 +11,32 @@ Try simulating bipolar oscillation, emu initial states
 # In[ ]:
 import argparse
 
-parser = argparse.ArgumentParser(description="Set Ne and Nmu from command line")
+parser = argparse.ArgumentParser(description="Set Nbare and Nbarmu from command line")
 parser.add_argument('--e', type=int, default=1, help="N e")
 parser.add_argument('--m', type=int, default=1, help="N mu")
 parser.add_argument('--method', type=str, default="statevector")
-parser.add_argument('--j', type=float, default=5.0, help="interaction strength (default 5.0)")
-parser.add_argument('--s', type=int, default=64, help="# of type steps")
-parser.add_argument('--l', type=float, default=0.5)
 args = parser.parse_args()
 
-print(f"Running with {args.e} electron neutrinos")
-print(f"Running with {args.m} muon neutrinos")
-print(f"Interaction strength is set to {args.j}.")
-print(f"Evolving over L={args.l} over {args.s} timesteps.")
-print("Using method: ", args.method)
+print(args.e)
+print(args.m)
+print(args.method)
 
 """
 Set up to evaluate classical solution for nunu
 """
 import numpy as np
 
-L          = args.l
-t_steps    = args.s
-# theta      = np.pi/2 - 0.2
-theta = np.pi/8
+L          = 0.5
+t_steps    = 64
+theta      = np.pi/2 - 0.2
 # theta = np.pi/2
-# dmsq       = 1.0
-dmsq = 1e1
+dmsq       = 1.0
 initial_state = ['e']*args.e + ['mu']*args.m
 
 n_qubits   = len(initial_state)
-# Delta = dmsq / (2*0.1) * np.array([1.] * n_qubits)
-Delta = dmsq / (2*0.1) * np.array([1., 1., 0.5, 0.5])
+Delta = dmsq / (2*0.1) * np.array([-1.] * n_qubits)
 b          = np.array([np.sin(2*theta), 0, -np.cos(2*theta)]) # the structure of the vacuum Hamiltonian in the Pauli basis
-J          = args.j * np.ones((n_qubits, n_qubits))
+J          = 5 * np.ones((n_qubits, n_qubits))
 MAX_SLOPE_CST = 512
 
 # In[136]:
@@ -193,17 +185,18 @@ MFT_P_table = np.reshape(sol.y, (n_qubits,3,len(L_table)))
 
 # P_table = np.reshape(sol.y, (4,3,len(L_table)))
 
-# plt.plot(L_table, 0.5*(1+MFT_P_table[0,2,:]), ls=':', lw=3)
-# plt.plot(L_table, 0.5*(1+MFT_P_table[-1,2,:]), ls=':', lw=3)
+plt.plot(L_table, 0.5*(1+MFT_P_table[0,2,:]), ls=':', lw=3)
+plt.plot(L_table, 0.5*(1+MFT_P_table[-1,2,:]), ls=':', lw=3)
 
 # In[139]:
+
 
 adaptive_l_table = L_table
 
 # In[140]:
 
 
-# print(adaptive_l_table)
+print(adaptive_l_table)
 
 # In[141]:
 
@@ -309,29 +302,10 @@ plt.plot(adaptive_l_table, pp[0,:, 1], color='blue', label=initial_state[0])
 plt.plot(adaptive_l_table, pp[-1,:, 1], color='orange', label=initial_state[-1])
 
 plt.legend()
-print(f"nunu_e_{args.e}_m_{args.m}_j_{args.j}_{args.method}.png")
-plt.savefig(f"nunu_e_{args.e}_m_{args.m}_j_{args.j}_{args.method}.png")
+plt.title("nubar nubar")
+plt.savefig(f"nubarnubar_e_{args.e}_mu_{args.m}_{args.method}.png")
 
 # In[ ]:
 
-plt.clf()
 
-plt.plot(L_table, MFT_P_table[0,0,:], ls=':', lw=3, color='blue')
-plt.plot(L_table, MFT_P_table[-1,0,:], ls=':', lw=3, color='orange')
-
-plt.savefig("1.png")
-
-plt.clf()
-
-plt.plot(L_table, MFT_P_table[0,1,:], ls=':', lw=3, color='blue')
-plt.plot(L_table, MFT_P_table[-1,1,:], ls=':', lw=3, color='orange')
-
-plt.savefig("2.png")
-
-plt.clf()
-
-plt.plot(L_table, MFT_P_table[0,2,:], ls=':', lw=3, color='blue')
-plt.plot(L_table, MFT_P_table[-1,2,:], ls=':', lw=3, color='orange')
-
-plt.savefig("3.png")
 
