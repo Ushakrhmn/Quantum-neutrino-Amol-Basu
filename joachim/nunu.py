@@ -33,16 +33,12 @@ import numpy as np
 
 L          = args.l
 t_steps    = args.s
-# theta      = np.pi/2 - 0.2
-theta = np.pi/8
-# theta = np.pi/2
-# dmsq       = 1.0
-dmsq = 1e1
+theta      = np.pi/2 - 0.2
+dmsq       = 1.0
 initial_state = ['e']*args.e + ['mu']*args.m
 
 n_qubits   = len(initial_state)
-# Delta = dmsq / (2*0.1) * np.array([1.] * n_qubits)
-Delta = dmsq / (2*0.1) * np.array([1., 1., 0.5, 0.5])
+Delta = dmsq / (2*0.1) * np.array([1.] * n_qubits)
 b          = np.array([np.sin(2*theta), 0, -np.cos(2*theta)]) # the structure of the vacuum Hamiltonian in the Pauli basis
 J          = args.j * np.ones((n_qubits, n_qubits))
 MAX_SLOPE_CST = 512
@@ -210,15 +206,29 @@ adaptive_l_table = L_table
 
 from scipy.linalg import expm
 
+# def U_nunu(theta):
+#     """the exponential of the neutrino-neutrino interaction Hamiltonian,
+#        exp(-1j*H_self_int(theta))), see Friedland & Lunardini,
+#        https://arxiv.org/abs/hep-ph/0304055
+#     """
+#     return np.array([[np.exp(-1j*theta), 0,                          0,                          0],
+#                      [0,                 0.5*( 1+np.exp(-1j*theta)), 0.5*(-1+np.exp(-1j*theta)), 0],
+#                      [0,                 0.5*(-1+np.exp(-1j*theta)), 0.5*( 1+np.exp(-1j*theta)), 0],
+#                      [0,                 0,                          0,                          np.exp(-1j*theta)]])
+
 def U_nunu(theta):
-    """the exponential of the neutrino-neutrino interaction Hamiltonian,
-       exp(-1j*H_self_int(theta))), see Friedland & Lunardini,
-       https://arxiv.org/abs/hep-ph/0304055
     """
-    return np.array([[np.exp(-1j*theta), 0,                          0,                          0],
-                     [0,                 0.5*( 1+np.exp(-1j*theta)), 0.5*(-1+np.exp(-1j*theta)), 0],
-                     [0,                 0.5*(-1+np.exp(-1j*theta)), 0.5*( 1+np.exp(-1j*theta)), 0],
-                     [0,                 0,                          0,                          np.exp(-1j*theta)]])
+    returns the interaction term for nunubar interactions
+    """
+
+    block = np.asarray([
+        [2, 0, 0, 0],
+        [0, 1, 1, 0],
+        [0, 1, 1, 0],
+        [0, 0, 0, 2]
+    ]) / 2
+
+    return expm(-1j * theta * block)
 
 # In[142]:
 
@@ -260,7 +270,7 @@ for i in tqdm(range(len(dt_table))):
 
     for iq1 in range(n_qubits):
         for iq2 in range(iq1+1, n_qubits):
-            qc.unitary(U_nunu(-dt*J[iq1, iq2]), [iq1, iq2])
+            qc.unitary(U_nunu(-dt*J[iq1, iq2] / n_qubits), [iq1, iq2]) # rescale by number of neutrino
 
 # save final state
 qc.save_density_matrix(label=str(i+2))
@@ -311,27 +321,3 @@ plt.plot(adaptive_l_table, pp[-1,:, 1], color='orange', label=initial_state[-1])
 plt.legend()
 print(f"nunu_e_{args.e}_m_{args.m}_j_{args.j}_{args.method}.png")
 plt.savefig(f"nunu_e_{args.e}_m_{args.m}_j_{args.j}_{args.method}.png")
-
-# In[ ]:
-
-plt.clf()
-
-plt.plot(L_table, MFT_P_table[0,0,:], ls=':', lw=3, color='blue')
-plt.plot(L_table, MFT_P_table[-1,0,:], ls=':', lw=3, color='orange')
-
-plt.savefig("1.png")
-
-plt.clf()
-
-plt.plot(L_table, MFT_P_table[0,1,:], ls=':', lw=3, color='blue')
-plt.plot(L_table, MFT_P_table[-1,1,:], ls=':', lw=3, color='orange')
-
-plt.savefig("2.png")
-
-plt.clf()
-
-plt.plot(L_table, MFT_P_table[0,2,:], ls=':', lw=3, color='blue')
-plt.plot(L_table, MFT_P_table[-1,2,:], ls=':', lw=3, color='orange')
-
-plt.savefig("3.png")
-
