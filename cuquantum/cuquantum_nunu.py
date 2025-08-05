@@ -40,7 +40,15 @@ def patched_version(pkg_name):
 importlib.metadata.version = patched_version
 
 import numpy as np
+
+import matplotlib
+
+matplotlib.rcParams['font.family']    = 'serif'
+matplotlib.rcParams['font.size']      = '16'
+matplotlib.rcParams['figure.figsize'] = 16, 8
+
 from matplotlib import pyplot as plt
+
 
 import warnings
 # warnings.filterwarnings("ignore")
@@ -149,7 +157,7 @@ def build_one_step_circuit(dt, rdms=None):
     # Apply the self-interaction term
     for iq1 in range(n_qubits):
         for iq2 in range(iq1+1, n_qubits):
-                qc.unitary(U_nunu(-dt*J[iq1, iq2]), [iq1, iq2])
+                qc.unitary(U_nunu(-dt*J[iq1, iq2]/n_qubits), [iq1, iq2])
                 
     return qc
 
@@ -236,8 +244,8 @@ print("Finished converting to probabilities.")
 
 plt.clf()
 
-plt.plot(L_table, 0.5*(1+MFT_P_table[0,2,:]), ls=':', lw=3)
-plt.plot(L_table, 0.5*(1+MFT_P_table[-1,2,:]), ls=':', lw=3)
+plt.plot(L_table, 0.5*(1+MFT_P_table[0,2,:]), ls=':', lw=3, color='orange')
+plt.plot(L_table, 0.5*(1+MFT_P_table[-1,2,:]), ls=':', lw=3, color='blue')
 
 plt.plot(adaptive_l_table, prob[0, :], color='orange')
 plt.plot(adaptive_l_table, prob[-1, :], color='blue')
