@@ -41,12 +41,12 @@ def u(n: int, k: int, circuit: qk.QuantumCircuit) -> None:
     return
 
   if n == k:
-    u(k-1, k-1, circuit) # U_{k-1, k-1} tensor I
     scs(k, k-1, circuit) # SCS_{k, k-1}
+    u(k-1, k-1, circuit) # U_{k-1, k-1} tensor I
     return
 
-  u(n-1, k, circuit) # U_{n-1, k}
   scs(n, k, circuit) # SCS_{n, k}
+  u(n-1, k, circuit) # U_{n-1, k}
   return
 
 if __name__ == "__main__":
