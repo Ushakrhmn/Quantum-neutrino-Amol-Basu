@@ -4,8 +4,8 @@
 #SBATCH --time=1-00:00:00
 #SBATCH --gpus-per-node=1
 
-source env.sh
+source ../env.sh
 
 nvidia-smi
 
-python cuquantum_nubarnubar.py "$@"
+python cuquantum_bipolar.py "$@"

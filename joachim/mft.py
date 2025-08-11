@@ -136,7 +136,7 @@ def P_osc_RS(t_table, theta, omega, lam, J, initial_flavors=None, alpha=None):
     ini_state = np.where(omega>0, Ee[:,None], Emu[:,None])
     if initial_flavors is not None:
         for f in initial_flavors:
-            if f not in ['e','x','mu','a']:
+            if f not in ['e','x','mu','a', 'ebar']:
                 raise ValueError(f'Unknown flavor: {f}')
             if f == 'a' and alpha is None:
                 raise ValueError('Initial superposition for neutrinos in flavor "a" not specified')
@@ -145,7 +145,7 @@ def P_osc_RS(t_table, theta, omega, lam, J, initial_flavors=None, alpha=None):
                 ini_state[:,ifi] = Ee[:]
             elif initial_flavors[ifi] == 'x':
                 ini_state[:,ifi] = Emu[:]
-            elif initial_flavors[ifi] == 'mu':
+            elif initial_flavors[ifi] == 'mu' or initial_flavors[ifi] == 'ebar':
                 ini_state[:,ifi] = Emu[:]
             elif initial_flavors[ifi] == 'a':
                 # FIXME I'm not sure this is correct
