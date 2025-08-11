@@ -14,10 +14,12 @@ import argparse
 parser = argparse.ArgumentParser(description="Set Ne and Nebar from command line")
 parser.add_argument('--e', type=int, default=1, help="N e")
 parser.add_argument('--b', type=int, default=1, help="N ebar")
+parser.add_argument('--d', type=bool, default=True, help="Flag for decomposing unitaries into basic gates")
 args = parser.parse_args()
 
 print(f"Running with {args.e} electron neutrinos")
 print(f"Running with {args.b} electron anti-neutrinos")
+print(f"Decomposing unitaries into basic gates: {args.d}")
 
 import qiskit as qk
 
@@ -63,7 +65,7 @@ Set up to evaluate classical solution for nunubar
 import numpy as np
 
 L          = 0.50
-t_steps    = 32
+t_steps    = 50
 theta      = np.pi/2 - 0.2
 dmsq       = 1.0
 
@@ -207,11 +209,6 @@ def evaluate_rdm(qc):
 def get_initial_rdms():
     rdms = []
 
-    # for isnu in nu_mask:
-    #     if isnu:
-    #         rdms.append(np.array([[1, 0], [0, 0]]))  # |nu><nu|
-    #     else:
-    #         rdms.append(np.array([[0, 0], [0, 1]])) # |nubar><nubar|
     for _ in range(n_qubits):
         rdms.append(np.array([[1, 0], [0, 0]]))  # |e><e|
 
@@ -234,6 +231,9 @@ for i, dt in tqdm(enumerate(dt_table)):
         continue
 
     qc = build_one_step_circuit(dt, rdms=rdm_step_dict[i-1])
+    if args.d:
+        # Decompose qc into basic gates using Qiskit's transpiler
+        qc = qk.transpile(qc, basis_gates=['u3', 'cx'], optimization_level=3)
     rdms = evaluate_rdm(qc)
     rdm_step_dict[i] = rdms
 
