@@ -170,9 +170,9 @@ def build_one_step_circuit(dt, rdms=None):
     for iq1 in range(n_qubits):
         for iq2 in range(iq1+1, n_qubits):
             if initial_state[iq1] == initial_state[iq2]: # either nunu or nubar-nubar
-                qc.unitary(U_nunu(-dt*J[iq1, iq2])/n_qubits, [iq1, iq2]) # rescale interaction strength by 1/n_qubits
+                qc.unitary(U_nunu(-dt*J[iq1, iq2]/n_qubits), [iq1, iq2]) # rescale interaction strength by 1/n_qubits
             else:
-                qc.unitary(U_nunubar(-dt*J[iq1, iq2])/n_qubits, [iq1, iq2]) # rescale interaction strength by 1/n_qubits
+                qc.unitary(U_nunubar(-dt*J[iq1, iq2]/n_qubits), [iq1, iq2]) # rescale interaction strength by 1/n_qubits
 
     return qc
 
