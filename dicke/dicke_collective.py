@@ -160,4 +160,4 @@ def demo_single_bin(n1=12, n2=4, omega=1.0, theta_v=0.15, mu=0.5,
 if __name__ == "__main__":
     # Example: single-energy homogeneous gas (one Dicke spin)
     # Expect vacuum-like precession; μ adds only a phase in symmetric subspace.
-    demo_single_bin(n1=4, n2=10, omega=1.0, theta_v=np.pi/4, mu=5.0)
+    demo_single_bin(n1=1, n2=1, omega=1.0, theta_v=np.pi/2 - 0.2, mu=5.0)
