@@ -68,9 +68,6 @@ def build_single_bin_hamiltonian(N: int, omega: float, theta_v: float, mu: float
     """
     Single-energy homogeneous gas (all-to-all equal coupling).
     In the fully symmetric S=N/2 Dicke subspace,
-      H_int ∝ μ J^2 = μ S(S+1) * I  (a constant phase).
-    So flavor probabilities are governed by the vacuum term only.
-    We include the constant anyway (it does not affect P_ee).
     """
     S = N / 2.0 # N neutrino system, total spin S = N / 2
     Jx, Jy, Jz = spin_matrices(S)
