@@ -62,6 +62,22 @@ def dicke_basis_vector(S: float, m: float):
     v[idx] = 1.0 # set the m-th element to 1
     return v
 
+def kron_on_slot(op, slot, dims):
+    """Place op on tensor slot `slot` with identities elsewhere (Kronecker)."""
+    out = None
+    for a, d in enumerate(dims):
+        A = op if a == slot else np.eye(d, dtype=complex)
+        out = A if out is None else np.kron(out, A)
+    return out
+
+def product_dicke_state(S_list, m_list):
+    """Return ⊗_a |S_a, m_a> as a vector in the tensor Dicke basis."""
+    vec = np.array([1.0 + 0.0j])
+    for S, m in zip(S_list, m_list):
+        v = dicke_basis_vector(S, m)
+        vec = np.kron(vec, v)
+    return vec
+
 # ---------- Hamiltonians ----------
 
 def build_single_bin_hamiltonian(N: int, omega: float, theta_v: float, mu: float):
@@ -83,6 +99,47 @@ def build_single_bin_hamiltonian(N: int, omega: float, theta_v: float, mu: float
 
     H = H_vac + H_int
     return H, (Jx, Jy, Jz), [S], [int(2*S+1)]
+
+def build_multi_bin_hamiltonian(N_list, omega_list, theta_v: float, mu: float):
+    """
+    Multi-energy, single-angle equal coupling μ for all inter-bin pairs:
+      H = Σ_a ω_a (B·J_a) + μ Σ_{a<b} J_a · J_b
+    """
+    assert len(N_list) == len(omega_list)
+    S_list = [n / 2.0 for n in N_list]
+
+    # Local spin matrices per bin
+    locals_ops = [spin_matrices(S) for S in S_list]
+    dims = [ops[0].shape[0] for ops in locals_ops]
+
+    # Lift to full space
+    Jx_list, Jy_list, Jz_list = [], [], []
+    for a, (Jx, Jy, Jz) in enumerate(locals_ops):
+        Jx_list.append(kron_on_slot(Jx, a, dims))
+        Jy_list.append(kron_on_slot(Jy, a, dims))
+        Jz_list.append(kron_on_slot(Jz, a, dims))
+
+    dim = int(np.prod(dims))
+    H = np.zeros((dim, dim), dtype=complex)
+
+    # Vacuum field
+    Bx = np.sin(2 * theta_v)
+    Bz = -np.cos(2 * theta_v)
+
+    # Vacuum term
+    for a, omega in enumerate(omega_list):
+        H += omega * (Bx * Jx_list[a] + Bz * Jz_list[a])
+
+    # ν–ν interaction: cross-bin only; intra-bin part is a constant in each S_a sector
+    for a in range(len(N_list)):
+        for b in range(a + 1, len(N_list)):
+            H += mu * (
+                Jx_list[a] @ Jx_list[b] +
+                Jy_list[a] @ Jy_list[b] +
+                Jz_list[a] @ Jz_list[b]
+            )
+
+    return H, (Jx_list, Jy_list, Jz_list), S_list, dims
 
 # ---------- Evolution & observables ----------
 
@@ -130,6 +187,22 @@ def single_bin_initial_state(n1: int, n2: int):
     v = dicke_basis_vector(S, m)
     return v, S
 
+def multi_bin_initial_state(n1_list, n2_list):
+    """
+    Build ⊗_a |S_a, m_a> where S_a=(n1_a+n2_a)/2 and m_a=(n1_a-n2_a)/2.
+    """
+    assert len(n1_list) == len(n2_list)
+    S_list = []
+    m_list = []
+    for n1, n2 in zip(n1_list, n2_list):
+        N = n1 + n2
+        S = N / 2.0
+        m = (n1 - n2) / 2.0
+        S_list.append(S)
+        m_list.append(m)
+    psi0 = product_dicke_state(S_list, m_list)
+    return psi0, S_list
+
 # ---------- Demos ----------
 
 def demo_single_bin(n1=12, n2=4, omega=1.0, theta_v=0.15, mu=0.5,
@@ -153,6 +226,32 @@ def demo_single_bin(n1=12, n2=4, omega=1.0, theta_v=0.15, mu=0.5,
         plt.ylim(0, 1)
         plt.show()
     return t_grid, Pee_t
+
+# ========= a-state helpers =========
+
+def bloch_from_flavor(theta, phi=0.0):
+    """
+    Flavor state: |ψ> = cos(theta)|e> + e^{i phi} sin(theta)|μ>
+    -> Bloch vector on flavor sphere: (x,y,z).
+    """
+    s2 = np.sin(2.0*theta)
+    return np.array([s2*np.cos(phi), s2*np.sin(phi), np.cos(2.0*theta)], dtype=float)
+
+def build_initial_state_ea(Ne, Na, alpha, phi=0.0, omega=1.0):
+    """
+    Build initial Bloch vectors for Ne electrons and Na copies of
+    |a> = cos(alpha)|e> + e^{i phi} sin(alpha)|μ>.
+    Returns:
+        P0_list : list of shape (Ne+Na, 3)
+        omegas  : np.ndarray of shape (Ne+Na,)
+    """
+    # basis Bloch vectors
+    P_e  = np.array([0.0, 0.0,  1.0], dtype=float)     # |e>
+    P_a  = bloch_from_flavor(alpha, phi)               # |a>
+
+    P0_list = [P_e.copy() for _ in range(Ne)] + [P_a.copy() for _ in range(Na)]
+    omegas  = np.full(Ne+Na, float(omega))
+    return P0_list, omegas, P_e, P_a
 
 if __name__ == "__main__":
     # Example: single-energy homogeneous gas (one Dicke spin)
