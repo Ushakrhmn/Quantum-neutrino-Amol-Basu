@@ -55,48 +55,27 @@ l_table = np.linspace(0, args.l, args.s)
 
 omega1, omega2 = dmsq / (2*args.energy1), dmsq / (2*args.energy2)
 
-# j = args.j * np.ones((n, n)) / n
+n = n1 + n2
 
-# mft_sol = mft.P_osc_RS(l_table, theta, omega, 0, j, initial_flavors=["e"]*args.e + ["mu"]*args.m)
+# uniform strength across bins
+j = args.j * np.ones((n, n)) / n
 
-# mft_sol = np.reshape(mft_sol.y, (n,3,len(l_table)))
+mft_omega = np.array([omega1] * n1 + [omega2] * n2)
 
-# mft_p_e = 0.5*(1+mft_sol[:,2,:])
+mft_intial_flavours = ["e"] * args.e1 + ["mu"] * args.m1 + ["e"] * args.e2 + ["mu"] * args.m2
 
-# mft_p_e = np.mean(mft_p_e, axis=0)
+mft_sol = mft.P_osc_RS(l_table, theta, mft_omega, 0, j, initial_flavors=mft_intial_flavours)
 
-# # -----
-# # Evaluate Dicke solution
-# # -----
+mft_sol = np.reshape(mft_sol.y, (n,3,len(l_table)))
 
-def demo_two_bins(n1a=8, n2a=0, n1b=0, n2b=8, omega1=1.0, omega2=1.2,
-                  theta_v=0.15, mu=0.5, t_max=40.0, T=400, make_plot=True):
-    # Build initial product Dicke state for two bins
-    psi0, S_list = multi_bin_initial_state([n1a+n2a, n1b+n2b], [0,0])  # we set m via signs below
-    # But we want explicit n1 up / n2 down per bin; construct m_a = (n1 - n2)/2
-    m_list = [ (n1a - n2a)/2.0, (n1b - n2b)/2.0 ]
-    psi0 = product_dicke_state(S_list, m_list)
+# average for each bin
+mft_p_e = 0.5*(1+mft_sol[:,2,:])
 
-    H, (Jx_list, Jy_list, Jz_list), S_list, dims = build_multi_bin_hamiltonian(
-        N_list=[int(2*S) for S in S_list],
-        omega_list=[omega1, omega2],
-        theta_v=theta_v,
-        mu=mu
-    )
-    t_grid = np.linspace(0.0, t_max, T)
-    states = evolve_times(H, psi0, t_grid)
-    _, Pee_t = bin_observables(states, Jz_list, S_list)
-    if make_plot:
-        plt.figure(figsize=(7,4))
-        plt.plot(t_grid, Pee_t[:,0], label=f'bin 1 (N={int(2*S_list[0])}, ω={omega1:.2f})')
-        plt.plot(t_grid, Pee_t[:,1], label=f'bin 2 (N={int(2*S_list[1])}, ω={omega2:.2f})')
-        plt.xlabel('time')
-        plt.ylabel('Pee (bin-averaged)')
-        plt.title('Two energy bins with equal μ (collective dynamics)')
-        plt.legend()
-        plt.tight_layout()
-        plt.show()
-    return t_grid, Pee_t
+mft_p_e = [np.mean(mft_p_e[:n1, :], axis=0), np.mean(mft_p_e[n1:, :], axis=0)]
+
+# -----
+# Evaluate Dicke solution
+# -----
 
 psi0, S_list = dc.multi_bin_initial_state([args.e1, args.e2], [args.m1, args.m2])
 m_list = [ (args.e1 - args.m1)/2.0, (args.e2 - args.m2)/2.0 ]
@@ -112,28 +91,26 @@ H, (Jx_list, Jy_list, Jz_list), S_list, dims = dc.build_multi_bin_hamiltonian(
 states = dc.evolve_times(H, psi0, l_table)
 _, dc_p_e = dc.bin_observables(states, Jz_list, S_list)
 
-# # -----
-# # Plot results
-# # -----
+# -----
+# Plot results
+# -----
 
 # # Create figure with two subplots
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12), height_ratios=[2, 1])
 
 # # Main plot (top subplot)
-ax1.plot(l_table, dc_p_e[:,0], label=f'Bin 1 (N={int(2*S_list[0])}, E={args.energy1:.2f})')
-ax1.plot(l_table, dc_p_e[:,1], label=f'Bin 2 (N={int(2*S_list[1])}, E={args.energy2:.2f})')
+ax1.plot(l_table, dc_p_e[:,0], label=f'Bin 1 (N={int(2*S_list[0])}, E={args.energy1:.2f})', color="blue")
+ax1.plot(l_table, dc_p_e[:,1], label=f'Bin 2 (N={int(2*S_list[1])}, E={args.energy2:.2f})', color="red")
+ax1.plot(l_table, mft_p_e[0], label=f'Bin 1 (MFT)', color="blue", ls="--")
+ax1.plot(l_table, mft_p_e[1], label=f'Bin 2 (MFT)', color="red", ls="--")
 ax1.legend()
-plt.show()
-# ax1.plot(l_table, mft_p_e, ls=':', lw=3, color=E_COLOR, label='MFT')
-# ax1.plot(l_table, 1-mft_p_e, ls=':', lw=3, color=MU_COLOR, label='MFT')
-# ax1.plot(l_table, dc_p_e[:,0], ls='-', lw=3, color=E_COLOR, label='Dicke')
-# ax1.plot(l_table, 1-dc_p_e[:,0], ls='-', lw=3, color=MU_COLOR, label='Dicke')
-# ax1.set_xlabel('baseline')
-# ax1.set_ylabel('Pe')
+ax1.set_xlabel('baseline')
+ax1.set_ylabel('Pe')
 # ax1.set_title('N_e = {}, N_mu = {}'.format(args.e, args.m))
-# ax1.legend()
+ax1.legend()
 # ax1.set_ylim(0, 1)
-# ax1.grid(True, alpha=0.3)
+ax1.grid(True, alpha=0.3)
+plt.show()
 
 # # Residuals plot (bottom subplot)
 # residuals_e = mft_p_e - dc_p_e[:,0]
