@@ -5,6 +5,7 @@ import numpy as np
 
 from matplotlib import pyplot as plt
 import qiskit as qk
+import qiskit_aer as aer
 
 # -----
 # Defining physical parameters
@@ -17,8 +18,8 @@ parser.add_argument('--e2', type=int, default=1, help="number of electron neutri
 parser.add_argument('--m1', type=int, default=1, help="number of muon neutrinos in bin 1")
 parser.add_argument('--m2', type=int, default=1, help="number of muon neutrinos in bin 2")
 parser.add_argument('--energy1', type=float, default=1.0, help="energy of bin 1")
-parser.add_argument('--energy2', type=float, default=1.2, help="energy of bin 2")
-parser.add_argument('--j', type=float, default=5.0, help="interaction strength (default 5.0)")
+parser.add_argument('--energy2', type=float, default=5.0, help="energy of bin 2")
+parser.add_argument('--j', type=float, default=0.05, help="interaction strength (default 0.05)")
 parser.add_argument('--l', type=float, default=10.0, help="baseline")
 parser.add_argument('--s', type=int, default=100, help="number of steps")
 args = parser.parse_args()
@@ -80,7 +81,7 @@ n = n1 + n2
 qc = qk.QuantumCircuit(n)
 
 # uniform strength across bins
-j = args.j * np.ones((n, n)) / n
+J = args.j * np.ones((n, n)) / n
 
 # np.fill_diagonal(j, 0) # no self-interaction
 
@@ -98,18 +99,20 @@ from mft import sigma_1, sigma_2, sigma_3
 for i in tqdm(range(len(dt_table))):
     dt = dt_table[i]
 
-    # artificially remove entanglement by resetting each qubit to a non-entangled state
-    qc_no_save = qc.remove_final_measurements(inplace=False)
-    qc_no_save.data = [inst for inst in qc.data if inst.operation.name != 'save_density_matrix']
-    sv = qk.quantum_info.Statevector(qc_no_save)
-    rho = [ np.array(qk.quantum_info.partial_trace(sv, [j for j in range(n) if j != k])) for k in range(n) ]
-    p   = [ np.real(np.array([ np.trace(sigma_1@rho[k]), np.trace(sigma_2@rho[k]), np.trace(sigma_3@rho[k]) ])) for k in range(n) ]
-    
-    # reset qubits to a non-entangled state to emulate the mean-field picture
-    qc.reset(range(n))
-    for j in range(n):
-        qc.ry(np.arccos(p[j][2]), j)
-        qc.rz(np.arctan2(p[j][1], p[j][0]), j)
+    if False:
+
+        # artificially remove entanglement by resetting each qubit to a non-entangled state
+        qc_no_save = qc.remove_final_measurements(inplace=False)
+        qc_no_save.data = [inst for inst in qc.data if inst.operation.name != 'save_density_matrix']
+        sv = qk.quantum_info.Statevector(qc_no_save)
+        rho = [ np.array(qk.quantum_info.partial_trace(sv, [j for j in range(n) if j != k])) for k in range(n) ]
+        p   = [ np.real(np.array([ np.trace(sigma_1@rho[k]), np.trace(sigma_2@rho[k]), np.trace(sigma_3@rho[k]) ])) for k in range(n) ]
+        
+        # reset qubits to a non-entangled state to emulate the mean-field picture
+        qc.reset(range(n))
+        for j in range(n):
+            qc.ry(np.arccos(p[j][2]), j)
+            qc.rz(np.arctan2(p[j][1], p[j][0]), j)
 
     qc.save_density_matrix(label=str(i+1))
 
@@ -119,12 +122,10 @@ for i in tqdm(range(len(dt_table))):
 
     for iq1 in range(n):
         for iq2 in range(iq1+1, n):
-            qc.unitary(U_nunu(-dt*j[iq1, iq2] / n), [iq1, iq2]) # rescale by number of neutrino
+            qc.unitary(U_nunu(-dt*J[iq1, iq2]), [iq1, iq2]) # rescale by number of neutrino
 
 # save final state
 qc.save_density_matrix(label=str(i+2))
-
-import qiskit_aer as aer
 
 # run simulation    
 sim = aer.AerSimulator()
@@ -147,9 +148,14 @@ print("Calculating probabilities ...")
 
 # rho_reduced = [ { k : np.array(qk.quantum_info.partial_trace(result.data()[k], [q for q in range(n_qubits) if q != j])) for k in result.data().keys() } for j in tqdm(range(n_qubits)) ]
 qc_p = np.array([ [[float(k), rho_reduced[j][k][0,0]] for k in rho_reduced[j].keys() ] for j in range(n) ])
-qc_p_e = np.abs(np.take_along_axis(qc_p, qc_p[:,:,0].argsort(axis=1)[:,:,None], axis=1))
+qc_p = np.abs(np.take_along_axis(qc_p, qc_p[:,:,0].argsort(axis=1)[:,:,None], axis=1))
 
-qc_p_e = np.mean(qc_p_e, axis=0)
+qc_p = qc_p[:, :, 1]
+
+qc_p_e = np.zeros((2, qc_p.shape[1]))
+qc_p_e[0] = np.mean(qc_p[:n1, :], axis=0)
+qc_p_e[1] = np.mean(qc_p[n1:n1+n2, :], axis=0)
+
 
 print("Quantum solution evaluated.")
 
@@ -189,7 +195,7 @@ ax1.legend()
 ax1.set_xlabel('baseline')
 ax1.set_ylabel('Pe')
 ax1.legend()
-ax1.set_ylim(0, 1)
+# ax1.set_ylim(0, 1)
 ax1.grid(True, alpha=0.3)
 
 # # Residuals plot (bottom subplot)
