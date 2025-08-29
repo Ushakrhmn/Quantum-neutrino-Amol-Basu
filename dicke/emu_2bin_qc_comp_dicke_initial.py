@@ -78,8 +78,6 @@ omega1, omega2 = dmsq / (2*args.energy1), dmsq / (2*args.energy2)
 
 n = n1 + n2
 
-qc = qk.QuantumCircuit(n)
-
 # uniform strength across bins
 J = args.j * np.ones((n, n)) / n
 
@@ -87,11 +85,28 @@ J = args.j * np.ones((n, n)) / n
 
 qc_omega = np.array([omega1] * n1 + [omega2] * n2)
 
-qc_initial_flavours = ["e"] * args.e1 + ["mu"] * args.m1 + ["e"] * args.e2 + ["mu"] * args.m2
+def create_dicke_11(qc):
+    qc.h(0)
+    qc.cx(0, 1)
+    qc.z(0)
+    qc.x(1)
 
-for iq in range(n): # we use Duan and Fuller's convention here where \nu_e = |0> and \bar\nu_e = |0>
-    if qc_initial_flavours[iq] == 'mu':
-        qc.x(iq)
+qc_first_bin = qk.QuantumCircuit(n1)
+create_dicke_11(qc_first_bin)
+qc_second_bin = qk.QuantumCircuit(n2)
+create_dicke_11(qc_second_bin)
+
+# Create a combined circuit with total number of qubits
+qc = qk.QuantumCircuit(n)
+
+# Add the first bin circuit to qubits 0 to n1-1
+qc = qc.compose(qc_first_bin, qubits=range(n1))
+
+# Add the second bin circuit to qubits n1 to n-1
+qc = qc.compose(qc_second_bin, qubits=range(n1, n))
+
+qc.draw(output="mpl")
+plt.savefig("dicke_circuit.png")
 
 from tqdm import tqdm
 from mft import sigma_1, sigma_2, sigma_3
@@ -99,20 +114,18 @@ from mft import sigma_1, sigma_2, sigma_3
 for i in tqdm(range(len(dt_table))):
     dt = dt_table[i]
 
-    if True:
-
-        # artificially remove entanglement by resetting each qubit to a non-entangled state
-        qc_no_save = qc.remove_final_measurements(inplace=False)
-        qc_no_save.data = [inst for inst in qc.data if inst.operation.name != 'save_density_matrix']
-        sv = qk.quantum_info.Statevector(qc_no_save)
-        rho = [ np.array(qk.quantum_info.partial_trace(sv, [j for j in range(n) if j != k])) for k in range(n) ]
-        p   = [ np.real(np.array([ np.trace(sigma_1@rho[k]), np.trace(sigma_2@rho[k]), np.trace(sigma_3@rho[k]) ])) for k in range(n) ]
-        
-        # reset qubits to a non-entangled state to emulate the mean-field picture
-        qc.reset(range(n))
-        for j in range(n):
-            qc.ry(np.arccos(p[j][2]), j)
-            qc.rz(np.arctan2(p[j][1], p[j][0]), j)
+    # # artificially remove entanglement by resetting each qubit to a non-entangled state
+    # qc_no_save = qc.remove_final_measurements(inplace=False)
+    # qc_no_save.data = [inst for inst in qc.data if inst.operation.name != 'save_density_matrix']
+    # sv = qk.quantum_info.Statevector(qc_no_save)
+    # rho = [ np.array(qk.quantum_info.partial_trace(sv, [j for j in range(n) if j != k])) for k in range(n) ]
+    # p   = [ np.real(np.array([ np.trace(sigma_1@rho[k]), np.trace(sigma_2@rho[k]), np.trace(sigma_3@rho[k]) ])) for k in range(n) ]
+    
+    # # reset qubits to a non-entangled state to emulate the mean-field picture
+    # qc.reset(range(n))
+    # for j in range(n):
+    #     qc.ry(np.arccos(p[j][2]), j)
+    #     qc.rz(np.arctan2(p[j][1], p[j][0]), j)
 
     qc.save_density_matrix(label=str(i+1))
 

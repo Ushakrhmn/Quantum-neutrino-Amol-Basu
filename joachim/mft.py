@@ -148,14 +148,7 @@ def P_osc_RS(t_table, theta, omega, lam, J, initial_flavors=None, alpha=None):
             elif initial_flavors[ifi] == 'mu' or initial_flavors[ifi] == 'ebar':
                 ini_state[:,ifi] = Emu[:]
             elif initial_flavors[ifi] == 'a':
-                # FIXME I'm not sure this is correct
                 ini_state[:,ifi] = np.array([np.sin(2*alpha), 0, np.cos(2*alpha)])[:]
-
-        # ini_state[:,initial_flavors=='e']  = Ee[:,None]
-        # ini_state[:,initial_flavors=='x']  = Emu[:,None]
-        # ini_state[:,initial_flavors=='mu'] = Emu[:,None]
-        # ini_state[:,initial_flavors=='a']  = np.array([np.sin(2*alpha), 0, np.cos(2*alpha)])[:,None]
-        # FIXME I'm not sure this is correct
         
     def f(t, P):
         """right-hand side of the evolution equation for the polarization vector P at time t."""
@@ -163,12 +156,6 @@ def P_osc_RS(t_table, theta, omega, lam, J, initial_flavors=None, alpha=None):
         res = np.zeros(3*n_modes)
         PP  = np.reshape(P, (n_modes,3)).T
         for k in range(n_modes):
-            # if k >= n_modes // 2:
-            #     res[3*k:3*k+3] = np.cross(-omega[k]*B + lam*L - PP@J[k,:], PP[:,k])
-            # else:
-            #     res[3*k:3*k+3] = np.cross(omega[k]*B + lam*L + PP@J[k,:], PP[:,k])
-
-            # per paper
             res[3*k:3*k+3] = np.cross(omega[k]*B + lam*L + PP@J[k,:], PP[:,k])
         return res
 

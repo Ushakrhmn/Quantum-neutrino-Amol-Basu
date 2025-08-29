@@ -160,24 +160,34 @@ qc_p_e[1] = np.mean(qc_p[n1:n1+n2, :], axis=0)
 print("Quantum solution evaluated.")
 
 # -----
-# Evaluate Dicke solution
+# Evaluate mean field solution
 # -----
 
-psi0, S_list = dc.multi_bin_initial_state([args.e1, args.e2], [args.m1, args.m2])
-m_list = [ (args.e1 - args.m1)/2.0, (args.e2 - args.m2)/2.0 ]
-psi0 = dc.product_dicke_state(S_list, m_list)
+l_table = np.linspace(0, args.l, args.s)
 
-H, (Jx_list, Jy_list, Jz_list), S_list, dims = dc.build_multi_bin_hamiltonian(
-    N_list=[int(2*S) for S in S_list],
-    omega_list=[omega1, omega2],
-    theta_v=theta,
-    mu=args.j / n
-)
+omega1, omega2 = dmsq / (2*args.energy1), dmsq / (2*args.energy2)
 
-states = dc.evolve_times(H, psi0, l_table)
-_, dc_p_e = dc.bin_observables(states, Jz_list, S_list)
+n = n1 + n2
 
-print("Dicke solution evaluated.")
+# uniform strength across bins
+j = args.j * np.ones((n, n)) / n
+
+# np.fill_diagonal(j, 0) # no self-interaction
+
+mft_omega = np.array([omega1] * n1 + [omega2] * n2)
+
+mft_intial_flavours = ["e"] * args.e1 + ["mu"] * args.m1 + ["e"] * args.e2 + ["mu"] * args.m2
+
+mft_sol = mft.P_osc_RS(l_table, theta, mft_omega, 0, j, initial_flavors=mft_intial_flavours)
+
+mft_sol = np.reshape(mft_sol.y, (n,3,len(l_table)))
+
+# average for each bin
+mft_p_e = 0.5*(1+mft_sol[:,2,:])
+
+mft_p_e = [np.mean(mft_p_e[:n1, :], axis=0), np.mean(mft_p_e[n1:, :], axis=0)]
+
+print("Mean field solution evaluated.")
 
 # -----
 # Plot results
@@ -187,8 +197,8 @@ print("Dicke solution evaluated.")
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12), height_ratios=[2, 1])
 
 # # Main plot (top subplot)
-ax1.plot(l_table, dc_p_e[:,0], label=f'Bin 1 (N={int(2*S_list[0])}, E={args.energy1:.2f})', color="blue")
-ax1.plot(l_table, dc_p_e[:,1], label=f'Bin 2 (N={int(2*S_list[1])}, E={args.energy2:.2f})', color="red")
+ax1.plot(l_table, mft_p_e[0], label=f'Bin 1 (MFT)', color="blue")
+ax1.plot(l_table, mft_p_e[1], label=f'Bin 2 (MFT)', color="red")
 ax1.plot(l_table, qc_p_e[0], label=f'Bin 1 (QC)', color="blue", ls="--")
 ax1.plot(l_table, qc_p_e[1], label=f'Bin 2 (QC)', color="red", ls="--")
 ax1.legend()
@@ -199,9 +209,9 @@ ax1.legend()
 ax1.grid(True, alpha=0.3)
 
 # # Residuals plot (bottom subplot)
-residual1 = qc_p_e[0] - dc_p_e[:,0]
+residual1 = qc_p_e[0] - mft_p_e[0]
 ax2.plot(l_table, residual1, label="Residual (Bin 1)", color="blue")
-residual2 = qc_p_e[1] - dc_p_e[:,1]
+residual2 = qc_p_e[1] - mft_p_e[1]
 ax2.plot(l_table, residual2, label="Residual (Bin 2)", color="red")
 ax2.legend()
 ax2.set_xlabel('baseline')
@@ -217,5 +227,5 @@ ax2.text(0.02, 0.98, f'Max residual: {max_residual:.2e}\nMean residual: {mean_re
          bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
 
 plt.tight_layout()
-plt.savefig('2bin_emu_qc.png')
+plt.savefig('2bin_emu_qc_mft.png')
 plt.show()

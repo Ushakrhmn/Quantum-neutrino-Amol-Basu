@@ -113,7 +113,7 @@ ax1.legend()
 ax1.set_xlabel('baseline')
 ax1.set_ylabel('Pe')
 ax1.legend()
-ax1.set_ylim(0, 1)
+# ax1.set_ylim(0, 1)
 ax1.grid(True, alpha=0.3)
 
 # # Residuals plot (bottom subplot)
