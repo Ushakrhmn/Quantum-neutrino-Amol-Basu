@@ -28,6 +28,7 @@ Example usage is provided under __main__.
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.linalg import expm
 
 # ---------- Spin algebra (Dicke basis) ----------
 
@@ -202,6 +203,65 @@ def multi_bin_initial_state(n1_list, n2_list):
         m_list.append(m)
     psi0 = product_dicke_state(S_list, m_list)
     return psi0, S_list
+
+def spin_coherent_state_by_rotation(S: float, theta: float, phi: float = 0.0):
+    """
+    Construct |theta,phi> = e^{-i phi Jz} e^{-i theta Jy} |S,S> in the Dicke |m> basis.
+    Basis ordering: m = -S, -S+1, ..., S (same as your spin_matrices).
+    """
+    Jx, Jy, Jz = spin_matrices(S)  # your existing function
+    d = int(2*S + 1)
+
+    # |S,S> corresponds to the last basis component (m=S -> index 2S)
+    v_top = np.zeros((d,), dtype=complex)
+    v_top[-1] = 1.0
+
+    # Apply rotations: first around y, then around z
+    Ry = expm(-1j * theta * Jy)
+    Rz = expm(-1j * phi   * Jz)
+    return Rz @ (Ry @ v_top)
+
+def product_state(vecs):
+    """Kronecker product of a list of state vectors."""
+    out = np.array([1.0 + 0.0j])
+    for v in vecs:
+        out = np.kron(out, v)
+    return out
+
+def multi_bin_initial_state_coherent(n1_list, n2_list, phi_list=None):
+    """
+    Build ⊗_a |θ_a, φ_a>, where S_a=(n1_a+n2_a)/2 and cos θ_a = (n1_a - n2_a)/(n1_a + n2_a).
+    If phi_list is None, all φ_a default to 0.
+
+    Returns:
+        psi0   : full tensor-product coherent state
+        S_list : list of S per bin
+        theta_list, phi_list : polar/azimuthal angles used per bin
+    """
+    assert len(n1_list) == len(n2_list)
+    K = len(n1_list)
+    if phi_list is None:
+        phi_list = [0.0] * K
+
+    S_list, theta_list, vecs = [], [], []
+    for n1, n2, phi in zip(n1_list, n2_list, phi_list):
+        N = n1 + n2
+        if N <= 0:
+            raise ValueError("Each bin must have N>0 for a coherent state.")
+        S = N / 2.0
+
+        # Match <Jz> to m = (n1-n2)/2  ->  cos(theta) = (n1-n2)/N
+        cos_theta = (n1 - n2) / float(N)
+        cos_theta = np.clip(cos_theta, -1.0, 1.0)  # numeric safety
+        theta = float(np.arccos(cos_theta))
+
+        v = spin_coherent_state_by_rotation(S, theta, phi)
+        S_list.append(S)
+        theta_list.append(theta)
+        vecs.append(v)
+
+    psi0 = product_state(vecs)
+    return psi0, S_list, theta_list, phi_list
 
 # ---------- Demos ----------
 

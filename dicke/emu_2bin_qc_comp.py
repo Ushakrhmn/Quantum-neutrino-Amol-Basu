@@ -22,6 +22,7 @@ parser.add_argument('--energy2', type=float, default=1.2, help="energy of bin 2"
 parser.add_argument('--j', type=float, default=0.05, help="interaction strength (default 0.05)")
 parser.add_argument('--l', type=float, default=10.0, help="baseline")
 parser.add_argument('--s', type=int, default=100, help="number of steps")
+parser.add_argument('--f', type=float, default=1.0, help="factor to scale dicke N")
 args = parser.parse_args()
 
 n1 = args.e1 + args.m1
@@ -163,15 +164,15 @@ print("Quantum solution evaluated.")
 # Evaluate Dicke solution
 # -----
 
-psi0, S_list = dc.multi_bin_initial_state([args.e1, args.e2], [args.m1, args.m2])
-m_list = [ (args.e1 - args.m1)/2.0, (args.e2 - args.m2)/2.0 ]
+psi0, S_list = dc.multi_bin_initial_state([args.e1 * args.f, args.e2 * args.f], [args.m1 * args.f, args.m2 * args.f])
+m_list = [ (args.e1 * args.f - args.m1 * args.f)/2.0, (args.e2 * args.f - args.m2 * args.f)/2.0 ]
 psi0 = dc.product_dicke_state(S_list, m_list)
 
 H, (Jx_list, Jy_list, Jz_list), S_list, dims = dc.build_multi_bin_hamiltonian(
     N_list=[int(2*S) for S in S_list],
     omega_list=[omega1, omega2],
     theta_v=theta,
-    mu=args.j / n
+    mu=args.j / (n * args.f)
 )
 
 states = dc.evolve_times(H, psi0, l_table)
@@ -217,5 +218,5 @@ ax2.text(0.02, 0.98, f'Max residual: {max_residual:.2e}\nMean residual: {mean_re
          bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
 
 plt.tight_layout()
-plt.savefig('2bin_emu_qc.png')
+plt.savefig('2bin_emu_qc_f{f}.png'.format(f=args.f))
 plt.show()
