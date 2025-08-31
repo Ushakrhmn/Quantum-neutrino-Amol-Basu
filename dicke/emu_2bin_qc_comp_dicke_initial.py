@@ -91,10 +91,12 @@ def create_dicke_11(qc):
     qc.z(0)
     qc.x(1)
 
-qc_first_bin = qk.QuantumCircuit(n1)
-create_dicke_11(qc_first_bin)
-qc_second_bin = qk.QuantumCircuit(n2)
-create_dicke_11(qc_second_bin)
+qc_first_bin = qk.QuantumCircuit(n1) # first bin is |00>
+# create_dicke_11(qc_first_bin)
+qc_second_bin = qk.QuantumCircuit(n2) # second bin is |11>
+# create_dicke_11(qc_second_bin)
+for i in range(n2):
+    qc_second_bin.x(i)
 
 # Create a combined circuit with total number of qubits
 qc = qk.QuantumCircuit(n)
