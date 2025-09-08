@@ -7,6 +7,8 @@ from matplotlib import pyplot as plt
 import qiskit as qk
 import qiskit_aer as aer
 
+from scipy.linalg import logm
+
 # -----
 # Defining physical parameters
 # -----
@@ -33,6 +35,7 @@ print("Simulating with uniform interaction strength of {j}.".format(j=args.j))
 print("Simulating with baseline {l} across {s} steps.".format(l=args.l, s=args.s))
 
 theta = np.pi/2 - 0.2
+# theta = 0
 b = np.array([np.sin(2*theta), 0, -np.cos(2*theta)]) # the structure of the vacuum Hamiltonian in the Pauli basis
 dmsq = 1.0
 
@@ -44,6 +47,7 @@ import matplotlib
 matplotlib.rcParams['font.family']    = 'serif'
 matplotlib.rcParams['font.size']      = '16'
 matplotlib.rcParams['figure.figsize'] = 16, 8
+matplotlib.rcParams['axes.formatter.useoffset'] = False
 
 E_COLOR = "blue"
 MU_COLOR = "red"
@@ -67,6 +71,48 @@ def U_nunu(theta):
     ]) / 2
 
     return expm(-1j * theta * block)
+
+def U_nunubar(theta):
+    """
+    returns the interaction term for nunubar interactions
+    """
+
+    block = np.asarray([
+        [-2, 0, 0, -1],
+        [0, -1, 0, 0],
+        [0, 0, -1, 0],
+        [-1, 0, 0, -2]
+    ]) / 2
+
+    return expm(-1j * theta * block)
+
+def entanglement_entropy(rho, tol=1e-12):
+    """
+    Compute entanglement entropy S = -Tr[rho log rho]
+    for a given reduced density matrix rho.
+    
+    Parameters
+    ----------
+    rho : np.ndarray
+        Reduced density matrix (Hermitian, positive semidefinite, trace=1).
+    tol : float
+        Numerical tolerance to avoid log(0). Eigenvalues smaller than tol are discarded.
+    
+    Returns
+    -------
+    float
+        Entanglement entropy (natural log base, in nats).
+    """
+    # Compute eigenvalues
+    eigvals = np.linalg.eigvalsh(rho)  # guaranteed real for Hermitian
+    # Discard tiny negative numerical artifacts
+    eigvals = np.clip(eigvals, 0, 1)
+    
+    # Compute entropy, ignoring zero eigenvalues
+    nonzero = eigvals[eigvals > tol]
+    S = -np.sum(nonzero * np.log(nonzero))
+    
+    return float(S)
 
 l_table = np.linspace(0, args.l, args.s)
 
@@ -139,7 +185,7 @@ sim = aer.AerSimulator()
 result = sim.run(qc).result()
 
 # extract and plot results
-rho_data = [result.data()[k] for k in result.data().keys()]  # assume keys are times
+rho_data = [result.data()[k] for k in sorted(result.data().keys())]  # assume keys are times
 
 def reduce_qubit(j):
     tmp = { k : np.array(qk.quantum_info.partial_trace(result.data()[k], [q for q in range(n) if q != j])) for k in result.data().keys() }
@@ -163,6 +209,8 @@ qc_p_e = np.zeros((2, qc_p.shape[1]))
 qc_p_e[0] = np.mean(qc_p[:n1, :], axis=0)
 qc_p_e[1] = np.mean(qc_p[n1:n1+n2, :], axis=0)
 
+print("Calculating entanglement entropy ...")
+qc_entanglement_entropy = np.array([ [entanglement_entropy(rho_reduced[j][k]) for k in sorted(rho_reduced[j].keys()) ] for j in range(n) ])
 
 print("Quantum solution evaluated.")
 
@@ -224,5 +272,28 @@ ax2.text(0.02, 0.98, f'Max residual: {max_residual:.2e}\nMean residual: {mean_re
          bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
 
 plt.tight_layout()
-plt.savefig('bipolar_2bin_emu_qc.png')
+plt.savefig('bipolar_2bin_qc.png')
+plt.show()
+
+window_size = 1  # Match the window size used in moving_average function
+
+def moving_average(x, window_size = 32):
+    return np.convolve(x, np.ones(window_size)/window_size, mode='valid')
+
+qc_entanglement_entropy_ma = np.array([ moving_average(qc_entanglement_entropy[j], window_size) for j in range(n) ])
+
+# Create corresponding x-axis for moving average (it will be shorter)
+l_table_ma = l_table[window_size-1:]  # This matches the length of the moving average
+
+# also plot entanglement entropy
+fig, ax = plt.subplots(figsize=(16, 8))
+
+for j in range(n):
+    ax.plot(l_table_ma, qc_entanglement_entropy_ma[j], label=f'Qubit {j}')
+ax.legend()
+ax.set_xlabel('baseline')
+ax.set_ylabel('Entanglement entropy')
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.savefig('bipolar_2bin_qc_entropy.png')
 plt.show()

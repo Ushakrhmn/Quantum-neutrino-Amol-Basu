@@ -7,6 +7,8 @@ from matplotlib import pyplot as plt
 import qiskit as qk
 import qiskit_aer as aer
 
+from scipy.linalg import logm
+
 # -----
 # Defining physical parameters
 # -----
@@ -69,6 +71,38 @@ def U_nunu(theta):
     ]) / 2
 
     return expm(-1j * theta * block)
+
+def entanglement_entropy_direct(rho, base=np.e):
+    log_rho = logm(rho) / np.log(base)   # matrix logarithm
+    return -np.real(np.trace(rho @ log_rho))
+
+def entanglement_entropy(rho, tol=1e-12):
+    """
+    Compute entanglement entropy S = -Tr[rho log rho]
+    for a given reduced density matrix rho.
+    
+    Parameters
+    ----------
+    rho : np.ndarray
+        Reduced density matrix (Hermitian, positive semidefinite, trace=1).
+    tol : float
+        Numerical tolerance to avoid log(0). Eigenvalues smaller than tol are discarded.
+    
+    Returns
+    -------
+    float
+        Entanglement entropy (natural log base, in nats).
+    """
+    # Compute eigenvalues
+    eigvals = np.linalg.eigvalsh(rho)  # guaranteed real for Hermitian
+    # Discard tiny negative numerical artifacts
+    eigvals = np.clip(eigvals, 0, 1)
+    
+    # Compute entropy, ignoring zero eigenvalues
+    nonzero = eigvals[eigvals > tol]
+    S = -np.sum(nonzero * np.log(nonzero))
+    
+    return float(S)
 
 l_table = np.linspace(0, args.l, args.s)
 
@@ -165,6 +199,8 @@ qc_p_e = np.zeros((2, qc_p.shape[1]))
 qc_p_e[0] = np.mean(qc_p[:n1, :], axis=0)
 qc_p_e[1] = np.mean(qc_p[n1:n1+n2, :], axis=0)
 
+print("Calculating entanglement entropy ...")
+qc_entanglement_entropy = np.array([ [entanglement_entropy(rho_reduced[j][k]) for k in sorted(rho_reduced[j].keys()) ] for j in range(n) ])
 
 print("Quantum solution evaluated.")
 
@@ -227,4 +263,26 @@ ax2.text(0.02, 0.98, f'Max residual: {max_residual:.2e}\nMean residual: {mean_re
 
 plt.tight_layout()
 plt.savefig('2bin_emu_qc_arb.png')
+
+def moving_average(x, window_size = 1):
+    return np.convolve(x, np.ones(window_size)/window_size, mode='valid')
+
+window_size = 1  # Match the window size used in moving_average function
+
+qc_entanglement_entropy_ma = np.array([ moving_average(qc_entanglement_entropy[j], window_size) for j in range(n) ])
+
+# Create corresponding x-axis for moving average (it will be shorter)
+l_table_ma = l_table[window_size-1:]  # This matches the length of the moving average
+
+# also plot entanglement entropy
+fig, ax = plt.subplots(figsize=(16, 8))
+
+for j in range(n):
+    ax.plot(l_table_ma, qc_entanglement_entropy_ma[j], label=f'Qubit {j}')
+ax.legend()
+ax.set_xlabel('baseline')
+ax.set_ylabel('Entanglement entropy')
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.savefig('2bin_emu_qc_arb_entropy.png')
 plt.show()
