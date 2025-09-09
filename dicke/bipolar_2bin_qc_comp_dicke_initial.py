@@ -210,7 +210,11 @@ qc_p_e[0] = np.mean(qc_p[:n1, :], axis=0)
 qc_p_e[1] = np.mean(qc_p[n1:n1+n2, :], axis=0)
 
 print("Calculating entanglement entropy ...")
-qc_entanglement_entropy = np.array([ [entanglement_entropy(rho_reduced[j][k]) for k in sorted(rho_reduced[j].keys()) ] for j in range(n) ])
+qc_entanglement_entropy = np.array([ [entanglement_entropy(rho_reduced[j][k]) for k in rho_reduced[j].keys()] for j in range(n) ])
+# Sort each qubit's entropy data by the time keys
+for j in range(n):
+    stamp_order = np.argsort([float(k) for k in rho_reduced[j].keys()])
+    qc_entanglement_entropy[j] = qc_entanglement_entropy[j][stamp_order]
 
 print("Quantum solution evaluated.")
 
@@ -275,21 +279,11 @@ plt.tight_layout()
 plt.savefig('bipolar_2bin_qc.png')
 plt.show()
 
-window_size = 1  # Match the window size used in moving_average function
-
-def moving_average(x, window_size = 32):
-    return np.convolve(x, np.ones(window_size)/window_size, mode='valid')
-
-qc_entanglement_entropy_ma = np.array([ moving_average(qc_entanglement_entropy[j], window_size) for j in range(n) ])
-
-# Create corresponding x-axis for moving average (it will be shorter)
-l_table_ma = l_table[window_size-1:]  # This matches the length of the moving average
-
 # also plot entanglement entropy
 fig, ax = plt.subplots(figsize=(16, 8))
 
 for j in range(n):
-    ax.plot(l_table_ma, qc_entanglement_entropy_ma[j], label=f'Qubit {j}')
+    ax.plot(l_table, qc_entanglement_entropy[j], label=f'Qubit {j}')
 ax.legend()
 ax.set_xlabel('baseline')
 ax.set_ylabel('Entanglement entropy')

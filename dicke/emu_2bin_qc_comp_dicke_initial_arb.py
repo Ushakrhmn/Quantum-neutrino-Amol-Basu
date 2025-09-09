@@ -24,6 +24,9 @@ parser.add_argument('--energy2', type=float, default=1.2, help="energy of bin 2"
 parser.add_argument('--j', type=float, default=1.0, help="interaction strength (default 0.05)")
 parser.add_argument('--l', type=float, default=15.0, help="baseline")
 parser.add_argument('--s', type=int, default=512, help="number of steps")
+parser.add_argument('--randomize', action='store_true', help="enable randomized Trotter steps")
+parser.add_argument('--noise_strength', type=float, default=0.1, help="strength of randomization (0.0 to 1.0)")
+parser.add_argument('--seed', type=int, default=42, help="random seed for reproducibility")
 args = parser.parse_args()
 
 n1 = args.e1 + args.m1
@@ -35,6 +38,9 @@ print("Bin 1 has energy {energy1}, bin 2 has energy {energy2}.".format(energy1=a
 
 print("Simulating with uniform interaction strength of {j}.".format(j=args.j))
 print("Simulating with baseline {l} across {s} steps.".format(l=args.l, s=args.s))
+if args.randomize:
+    print("Randomized Trotter steps enabled with noise strength {noise}.".format(noise=args.noise_strength))
+    print("Using random seed {seed} for reproducibility.".format(seed=args.seed))
 
 theta = np.pi/2 - 0.2
 b = np.array([np.sin(2*theta), 0, -np.cos(2*theta)]) # the structure of the vacuum Hamiltonian in the Pauli basis
@@ -106,7 +112,18 @@ def entanglement_entropy(rho, tol=1e-12):
 
 l_table = np.linspace(0, args.l, args.s)
 
-dt_table = np.diff(l_table)
+# Apply randomization to time steps if enabled
+if args.randomize:
+    np.random.seed(args.seed)  # Set seed for reproducibility
+    # Add random fluctuations to each time step
+    dt_base = np.diff(l_table)
+    noise = np.random.normal(0, args.noise_strength, len(dt_base))
+    dt_table = dt_base * (1 + noise)
+    # Ensure all time steps remain positive
+    dt_table = np.abs(dt_table)
+    print(f"Applied randomization: mean dt = {np.mean(dt_table):.6f}, std dt = {np.std(dt_table):.6f}")
+else:
+    dt_table = np.diff(l_table)
 
 omega1, omega2 = dmsq / (2*args.energy1), dmsq / (2*args.energy2)
 
@@ -200,7 +217,11 @@ qc_p_e[0] = np.mean(qc_p[:n1, :], axis=0)
 qc_p_e[1] = np.mean(qc_p[n1:n1+n2, :], axis=0)
 
 print("Calculating entanglement entropy ...")
-qc_entanglement_entropy = np.array([ [entanglement_entropy(rho_reduced[j][k]) for k in sorted(rho_reduced[j].keys()) ] for j in range(n) ])
+qc_entanglement_entropy = np.array([ [entanglement_entropy(rho_reduced[j][k]) for k in rho_reduced[j].keys()] for j in range(n) ])
+# Sort each qubit's entropy data by the time keys
+for j in range(n):
+    stamp_order = np.argsort([float(k) for k in rho_reduced[j].keys()])
+    qc_entanglement_entropy[j] = qc_entanglement_entropy[j][stamp_order]
 
 print("Quantum solution evaluated.")
 
@@ -262,27 +283,22 @@ ax2.text(0.02, 0.98, f'Max residual: {max_residual:.2e}\nMean residual: {mean_re
          bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
 
 plt.tight_layout()
-plt.savefig('2bin_emu_qc_arb.png')
-
-def moving_average(x, window_size = 1):
-    return np.convolve(x, np.ones(window_size)/window_size, mode='valid')
-
-window_size = 1  # Match the window size used in moving_average function
-
-qc_entanglement_entropy_ma = np.array([ moving_average(qc_entanglement_entropy[j], window_size) for j in range(n) ])
-
-# Create corresponding x-axis for moving average (it will be shorter)
-l_table_ma = l_table[window_size-1:]  # This matches the length of the moving average
+if args.randomize:
+    plt.savefig(f'2bin_emu_qc_arb_randomized_noise{args.noise_strength}_seed{args.seed}.png')
+else:
+    plt.savefig('2bin_emu_qc_arb.png')
 
 # also plot entanglement entropy
 fig, ax = plt.subplots(figsize=(16, 8))
 
 for j in range(n):
-    ax.plot(l_table_ma, qc_entanglement_entropy_ma[j], label=f'Qubit {j}')
+    ax.plot(l_table, qc_entanglement_entropy[j], label=f'Qubit {j}')
 ax.legend()
 ax.set_xlabel('baseline')
 ax.set_ylabel('Entanglement entropy')
 ax.grid(True, alpha=0.3)
 plt.tight_layout()
-plt.savefig('2bin_emu_qc_arb_entropy.png')
-plt.show()
+if args.randomize:
+    plt.savefig(f'2bin_emu_qc_arb_entropy_randomized_noise{args.noise_strength}_seed{args.seed}.png')
+else:
+    plt.savefig('2bin_emu_qc_arb_entropy.png')
