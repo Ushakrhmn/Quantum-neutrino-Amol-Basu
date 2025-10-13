@@ -142,6 +142,50 @@ def build_multi_bin_hamiltonian(N_list, omega_list, theta_v: float, mu: float):
 
     return H, (Jx_list, Jy_list, Jz_list), S_list, dims
 
+def build_multi_bin_hamiltonian_rev_sign(N_list, omega_list, theta_v: float, mu: float):
+    """
+    Multi-energy, single-angle equal coupling μ for all inter-bin pairs:
+      H = Σ_a ω_a (B·J_a) + μ Σ_{a<b} J_a · J_b
+    """
+    assert len(N_list) == len(omega_list)
+    S_list = [n / 2.0 for n in N_list]
+
+    # Local spin matrices per bin
+    locals_ops = [spin_matrices(S) for S in S_list]
+    dims = [ops[0].shape[0] for ops in locals_ops]
+
+    # Lift to full space
+    Jx_list, Jy_list, Jz_list = [], [], []
+    for a, (Jx, Jy, Jz) in enumerate(locals_ops):
+        Jx_list.append(kron_on_slot(Jx, a, dims))
+        Jy_list.append(kron_on_slot(Jy, a, dims))
+        Jz_list.append(kron_on_slot(Jz, a, dims))
+
+    dim = int(np.prod(dims))
+    H = np.zeros((dim, dim), dtype=complex)
+
+    # Vacuum field
+    Bx = np.sin(2 * theta_v)
+    Bz = -np.cos(2 * theta_v)
+
+    # Vacuum term
+    for a, omega in enumerate(omega_list):
+        H += omega * (Bx * Jx_list[a] + Bz * Jz_list[a])
+    
+    H += 2 * mu * (Jx_list[0] @ Jx_list[0] + Jy_list[0] @ Jy_list[0] + Jz_list[0] @ Jz_list[0])
+    H += 2 * mu * (Jx_list[1] @ Jx_list[1] + Jy_list[1] @ Jy_list[1] + Jz_list[1] @ Jz_list[1])
+
+    # ν–ν interaction: cross-bin only; intra-bin part is a constant in each S_a sector
+    for a in range(len(N_list)):
+        for b in range(a + 1, len(N_list)):
+            H -= 2 * mu * (
+                Jx_list[a] @ Jx_list[b] +
+                Jy_list[a] @ Jy_list[b] +
+                Jz_list[a] @ Jz_list[b]
+            )
+
+    return H, (Jx_list, Jy_list, Jz_list), S_list, dims
+
 # ---------- Evolution & observables ----------
 
 def evolve_times(H, psi0, t_grid):

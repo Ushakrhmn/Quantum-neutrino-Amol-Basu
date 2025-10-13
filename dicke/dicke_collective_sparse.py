@@ -180,30 +180,44 @@ def build_multi_bin_hamiltonian(N_list, omega_list, theta_v: float, mu: float):
 # ---------- Evolution & observables ----------
 
 def evolve_times(H, psi0, t_grid):
-    """Exact unitary evolution |ψ(t)> using expm_multiply for maximum efficiency.
-    
-    Works with sparse Hamiltonians and sparse initial states to conserve memory.
-    Uses expm_multiply to compute exp(-iHt) @ psi0 directly without forming exp(-iHt).
-    """
-    # Ensure H is in CSR format for efficient sparse operations
-    print("Evolving states ...")
-    if hasattr(H, 'tocsr'):
-        H = H.tocsr()
-    
-    states = []
-    for t in tqdm(t_grid):
-        # Use expm_multiply: |ψ(t)> = exp(-iHt) @ |ψ(0)> computed directly
-        psi_t = expm_multiply(-1j * t * H, psi0)
-        # Convert to dense array and ensure correct shape
-        if hasattr(psi_t, 'toarray'):
-            psi_t = psi_t.toarray().flatten()
-        else:
-            psi_t = np.asarray(psi_t).flatten()
-        states.append(psi_t)
+    """Evolve psi0 under Hamiltonian H for times in t_grid.
 
-    print("States evolved.")
-    
-    return np.array(states)
+    Parameters
+    ----------
+    H : (N,N) array or sparse matrix
+        Hamiltonian.
+    psi0 : (N,) array
+        Initial state.
+    t_grid : array_like
+        Monotonically increasing list/array of times.
+
+    Returns
+    -------
+    Y : ndarray, shape (len(t_grid), N)
+        State at each time in t_grid.
+    """
+    import numpy as np
+    from scipy.sparse import csr_matrix
+    from scipy.sparse.linalg import expm_multiply
+
+    # Ensure H is csr_matrix (not csr_array)
+    if not isinstance(H, csr_matrix):
+        H = csr_matrix(H)
+
+    # Ensure psi0 is a dense array (expm_multiply requires this)
+    if hasattr(psi0, 'toarray'):
+        psi0 = psi0.toarray().flatten()
+    else:
+        psi0 = np.asarray(psi0).flatten()
+
+    t0, t1 = float(t_grid[0]), float(t_grid[-1])
+    num = len(t_grid)
+
+    # Let expm_multiply handle sampling on [t0, t1]
+    Y = expm_multiply(-1j * H, psi0, start=t0, stop=t1, num=num, endpoint=True)
+
+    # Y is usually of shape (num, D)
+    return np.asarray(Y)
 
 def bin_observables(states, Jz_list, S_list):
     """

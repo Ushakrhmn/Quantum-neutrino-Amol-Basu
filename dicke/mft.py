@@ -2,8 +2,6 @@
 Functions taken from bipolar-oscillations.ipynb, Raffelt–Sigl Polarization-Vector Approach to Collective Oscillations
 """
 
-import sys, os
-import matplotlib
 import numpy as np
 import scipy.integrate as integ
 

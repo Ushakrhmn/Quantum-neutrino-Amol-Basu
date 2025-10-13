@@ -1,5 +1,5 @@
 import mft
-import dicke_collective as dc
+import dicke_collective_sparse as dc
 
 import numpy as np
 
@@ -19,9 +19,9 @@ parser.add_argument('--e', type=int, default=1, help="number of electron neutrin
 parser.add_argument('--b', type=int, default=1, help="number of electron anti-neutrinos." )
 parser.add_argument('--energy1', type=float, default=1.0, help="energy of bin 1 neutrinos")
 parser.add_argument('--energy2', type=float, default=1.0, help="energy of bin 2 anti-neutrinos")
-parser.add_argument('--j', type=float, default=0.05, help="interaction strength (default 0.05)")
-parser.add_argument('--l', type=float, default=10.0, help="baseline")
-parser.add_argument('--s', type=int, default=100, help="number of steps")
+parser.add_argument('--j', type=float, default=1.0, help="interaction strength (default 0.05)")
+parser.add_argument('--l', type=float, default=15.0, help="baseline")
+parser.add_argument('--s', type=int, default=512, help="number of steps")
 args = parser.parse_args()
 
 n1 = args.e
@@ -35,8 +35,10 @@ print("Simulating with uniform interaction strength of {j}.".format(j=args.j))
 print("Simulating with baseline {l} across {s} steps.".format(l=args.l, s=args.s))
 
 theta = np.pi/2 - 0.2
+# theta = 0.00
 # theta = 0
 b = np.array([np.sin(2*theta), 0, -np.cos(2*theta)]) # the structure of the vacuum Hamiltonian in the Pauli basis
+# dmsq = -1.0
 dmsq = 1.0
 
 # -----
@@ -136,6 +138,10 @@ qc_omega = np.array([omega1] * n1 + [omega2] * n2)
 qc_first_bin = qk.QuantumCircuit(n1) # first bin is |0...0>
 qc_second_bin = qk.QuantumCircuit(n2) # second bin is |0...0>
 
+# In new convention, represent bin 2 nubar as |1...1>
+for i in range(n2):
+    qc_second_bin.x(i)
+
 # Create a combined circuit with total number of qubits
 qc = qk.QuantumCircuit(n)
 
@@ -222,8 +228,12 @@ print("Quantum solution evaluated.")
 # Evaluate Dicke solution
 # -----
 
-psi0, S_list = dc.multi_bin_initial_state([args.e, args.b], [0, 0])
-m_list = [ args.e / 2., args.b / 2. ]
+# psi0, S_list = dc.multi_bin_initial_state([args.e, args.b], [0, 0])
+# m_list = [ args.e / 2., args.b / 2. ]
+
+psi0, S_list = dc.multi_bin_initial_state([args.e, 0], [0, args.b])
+m_list = [ args.e / 2., - args.b / 2. ]
+
 psi0 = dc.product_dicke_state(S_list, m_list)
 
 H, (Jx_list, Jy_list, Jz_list), S_list, dims = dc.build_multi_bin_hamiltonian(
@@ -246,8 +256,8 @@ print("Dicke solution evaluated.")
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12), height_ratios=[2, 1])
 
 # # Main plot (top subplot)
-ax1.plot(l_table, dc_p_e[:,0], label=f'Bin 1 (N={int(2*S_list[0])}, E={args.energy1:.2f})', color="blue")
-ax1.plot(l_table, dc_p_e[:,1], label=f'Bin 2 (N={int(2*S_list[1])}, E={args.energy2:.2f})', color="red")
+ax1.plot(l_table, dc_p_e[:,0], label=f'Bin 1 (Dicke) (N={int(2*S_list[0])}, E={args.energy1:.2f})', color="blue")
+ax1.plot(l_table, dc_p_e[:,1], label=f'Bin 2 (Dicke) (N={int(2*S_list[1])}, E={args.energy2:.2f})', color="red")
 ax1.plot(l_table, qc_p_e[0], label=f'Bin 1 (QC)', color="blue", ls="--")
 ax1.plot(l_table, qc_p_e[1], label=f'Bin 2 (QC)', color="red", ls="--")
 ax1.legend()
@@ -275,8 +285,13 @@ ax2.text(0.02, 0.98, f'Max residual: {max_residual:.2e}\nMean residual: {mean_re
          transform=ax2.transAxes, verticalalignment='top', 
          bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
 
+ax1.text(0.02, 0.98, f'theta = {theta:.2f}\ndmsq = {dmsq:.2f}\nJ = {args.j:.2f}', 
+        transform=ax1.transAxes, verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
 plt.tight_layout()
-plt.savefig('bipolar_2bin_qc.png')
+plt.savefig('bipolar_plot.png')
+plt.savefig('bipolar_plot.pdf')
+plt.savefig('bipolar_plot.eps')
 plt.show()
 
 # also plot entanglement entropy
@@ -286,8 +301,10 @@ for j in range(n):
     ax.plot(l_table, qc_entanglement_entropy[j], label=f'Qubit {j}')
 ax.legend()
 ax.set_xlabel('baseline')
-ax.set_ylabel('Entanglement entropy')
+ax.set_ylabel('S')
 ax.grid(True, alpha=0.3)
 plt.tight_layout()
-plt.savefig('bipolar_2bin_qc_entropy.png')
+plt.savefig('bipolar_plot_s.png')
+plt.savefig('bipolar_plot_s.pdf')
+plt.savefig('bipolar_plot_s.eps')
 plt.show()
