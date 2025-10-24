@@ -141,6 +141,9 @@ ax1.legend()
 # ax1.set_ylim(0, 1)
 ax1.grid(True, alpha=0.3)
 
+ax1.text(0.02, 0.98, f'theta = {theta:.2f}\ndmsq = {dmsq:.2f}\nJ = {args.j:.2f}', 
+        transform=ax1.transAxes, verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
 # # Residuals plot (bottom subplot)
 residual1 = mft_p_e[0] - dc_p_e[:,0]
 ax2.plot(t_stream, residual1, label="Residual (Bin 1)", color="blue")

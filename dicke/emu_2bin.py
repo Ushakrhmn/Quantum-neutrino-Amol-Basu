@@ -1,6 +1,7 @@
 import mft
 import dicke_collective_sparse as dc
 import numpy as np
+from datetime import datetime
 
 from matplotlib import pyplot as plt
 
@@ -11,14 +12,15 @@ import argparse
 
 parser = argparse.ArgumentParser(description="Physical parameters.")
 parser.add_argument('--e1', type=int, default=1, help="number of electron neutrinos in bin 1")
-parser.add_argument('--e2', type=int, default=1, help="number of electron neutrinos in bin 2")
-parser.add_argument('--m1', type=int, default=1, help="number of muon neutrinos in bin 1")
+parser.add_argument('--e2', type=int, default=0, help="number of electron neutrinos in bin 2")
+parser.add_argument('--m1', type=int, default=0, help="number of muon neutrinos in bin 1")
 parser.add_argument('--m2', type=int, default=1, help="number of muon neutrinos in bin 2")
 parser.add_argument('--energy1', type=float, default=1.0, help="energy of bin 1")
 parser.add_argument('--energy2', type=float, default=1.2, help="energy of bin 2")
 parser.add_argument('--j', type=float, default=5.0, help="interaction strength (default 5.0)")
 parser.add_argument('--l', type=float, default=10.0, help="baseline")
 parser.add_argument('--s', type=int, default=100, help="number of steps")
+parser.add_argument('--savename', type=str, default='2bin_dicke_only', help="name of the saved figure")
 args = parser.parse_args()
 
 n1 = args.e1 + args.m1
@@ -65,16 +67,16 @@ mft_omega = np.array([omega1] * n1 + [omega2] * n2)
 
 mft_intial_flavours = ["e"] * args.e1 + ["mu"] * args.m1 + ["e"] * args.e2 + ["mu"] * args.m2
 
-# mft_sol = mft.P_osc_RS(l_table, theta, mft_omega, 0, j, initial_flavors=mft_intial_flavours)
+mft_sol = mft.P_osc_RS(l_table, theta, mft_omega, 0, j, initial_flavors=mft_intial_flavours)
 
-# mft_sol = np.reshape(mft_sol.y, (n,3,len(l_table)))
+mft_sol = np.reshape(mft_sol.y, (n,3,len(l_table)))
 
 # average for each bin
-# mft_p_e = 0.5*(1+mft_sol[:,2,:])
+mft_p_e = 0.5*(1+mft_sol[:,2,:])
 
-# mft_p_e = [np.mean(mft_p_e[:n1, :], axis=0), np.mean(mft_p_e[n1:, :], axis=0)]
+mft_p_e = [np.mean(mft_p_e[:n1, :], axis=0), np.mean(mft_p_e[n1:, :], axis=0)]
 
-# print("Mean field solution evaluated.")
+print("Mean field solution evaluated.")
 
 # -----
 # Evaluate Dicke solution
@@ -120,43 +122,48 @@ plt.ylabel('Pe')
 plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
-plt.savefig('2bin_dicke_only.png')
+plt.savefig(args.savename + '.png')
 plt.show()
 
 
-# # # Create figure with two subplots
-# fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12), height_ratios=[2, 1])
+# Create figure with two subplots
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12), height_ratios=[2, 1])
 
-# # # Main plot (top subplot)
-# ax1.plot(l_table, dc_p_e[:,0], label=f'Bin 1 (N={int(2*S_list[0])}, E={args.energy1:.2f})', color="blue")
-# ax1.plot(l_table, dc_p_e[:,1], label=f'Bin 2 (N={int(2*S_list[1])}, E={args.energy2:.2f})', color="red")
-# ax1.plot(l_table, mft_p_e[0], label=f'Bin 1 (MFT)', color="blue", ls="--")
-# ax1.plot(l_table, mft_p_e[1], label=f'Bin 2 (MFT)', color="red", ls="--")
-# ax1.legend()
-# ax1.set_xlabel('baseline')
-# ax1.set_ylabel('Pe')
-# ax1.legend()
-# # ax1.set_ylim(0, 1)
-# ax1.grid(True, alpha=0.3)
+# # Main plot (top subplot)
+ax1.plot(l_table, dc_p_e[:,0], label=f'Bin 1 (N={int(2*S_list[0])}, E={args.energy1:.2f})', color="blue")
+ax1.plot(l_table, dc_p_e[:,1], label=f'Bin 2 (N={int(2*S_list[1])}, E={args.energy2:.2f})', color="red")
+ax1.plot(l_table, mft_p_e[0], label=f'Bin 1 (MFT)', color="blue", ls="--")
+ax1.plot(l_table, mft_p_e[1], label=f'Bin 2 (MFT)', color="red", ls="--")
+ax1.legend()
+ax1.set_xlabel('baseline')
+ax1.set_ylabel('Pe')
+ax1.legend()
+# ax1.set_ylim(0, 1)
+ax1.grid(True, alpha=0.3)
 
-# # # Residuals plot (bottom subplot)
-# residual1 = mft_p_e[0] - dc_p_e[:,0]
-# ax2.plot(l_table, residual1, label="Residual (Bin 1)", color="blue")
-# residual2 = mft_p_e[1] - dc_p_e[:,1]
-# ax2.plot(l_table, residual2, label="Residual (Bin 2)", color="red")
-# ax2.legend()
-# ax2.set_xlabel('baseline')
-# ax2.set_ylabel('Residuals (MFT - Dicke)')
-# ax2.grid(True, alpha=0.3)
+# # Residuals plot (bottom subplot)
+residual1 = mft_p_e[0] - dc_p_e[:,0]
+ax2.plot(l_table, residual1, label="Residual (Bin 1)", color="blue")
+residual2 = mft_p_e[1] - dc_p_e[:,1]
+ax2.plot(l_table, residual2, label="Residual (Bin 2)", color="red")
+ax2.legend()
+ax2.set_xlabel('baseline')
+ax2.set_ylabel('Residuals (MFT - Dicke)')
+ax2.grid(True, alpha=0.3)
 
-# # Add some statistics to show how close the solutions are
-# max_residual = max(np.max(np.abs(residual1)), np.max(np.abs(residual2)))
-# mean_residual = np.mean([np.mean(np.abs(residual1)), np.mean(np.abs(residual2))])
+# Add some statistics to show how close the solutions are
+max_residual = max(np.max(np.abs(residual1)), np.max(np.abs(residual2)))
+mean_residual = np.mean([np.mean(np.abs(residual1)), np.mean(np.abs(residual2))])
 
-# ax2.text(0.02, 0.98, f'Max residual: {max_residual:.2e}\nMean residual: {mean_residual:.2e}', 
-#          transform=ax2.transAxes, verticalalignment='top', 
-#          bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+ax2.text(0.02, 0.98, f'Max residual: {max_residual:.2e}\nMean residual: {mean_residual:.2e}', 
+         transform=ax2.transAxes, verticalalignment='top', 
+         bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
 
-# plt.tight_layout()
-# plt.savefig('2bin_emu.png')
-# plt.show()
+plt.tight_layout()
+
+# Generate timestamp including minutes
+timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+output_filename = f'emu_{timestamp}_n{n}.png'
+plt.savefig(output_filename)
+print(f"Plot saved to {output_filename}")
+plt.show()
