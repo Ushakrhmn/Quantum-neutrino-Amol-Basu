@@ -12,13 +12,11 @@ First load python
 
 After cloning the repository, create a virtual environment in the project root level.
 
-    python -m venv ENV
+Follow https://docs.alliancecan.ca/wiki/Python
+
+or you can directly use the `setup.sh` in the included scripts.
 
 If you are not planning to run the tensor network scripts, you can install the packages in requirements.txt. Otherwise, use requirements_tn.txt, and follow the instructions below for KaHyPar.
-
-The instructions for installing python packages in the virtual environment can be found on CCDB wiki here:
-
-https://docs.alliancecan.ca/wiki/Python
 
 ## Activating environment
 
