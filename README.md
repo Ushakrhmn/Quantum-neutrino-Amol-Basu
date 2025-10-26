@@ -1,5 +1,46 @@
 Hello! Please make sure you do not publish this repository publicly, because it contains our IBM tokens.
 
+# Environment Setup
+
+The instructions and environment scripts are prepared for CCDB Fir server. It should in theory be generalizable to other environments, but some modules available on CCDB servers may need to be installed manually.
+
+## Setting up a virtual environment
+
+First load python
+    
+    module load python/3.11
+
+After cloning the repository, create a virtual environment in the project root level.
+
+Follow https://docs.alliancecan.ca/wiki/Python
+
+or you can directly use the `setup.sh` in the included scripts.
+
+If you are not planning to run the tensor network scripts, you can install the packages in requirements.txt. Otherwise, use requirements_tn.txt, and follow the instructions below for KaHyPar.
+
+## Activating environment
+
+The project is designed in such a way that the different tasks (for example, dicke method, tensor network, real ibm computer) shares the same environment to reduce complexity.
+
+You can find the environment activation script env.sh in the project root level.
+
+When trying to activate the environment, first do
+
+    cd [subfolder]
+
+For example, if you are working with Dicke state simulations,
+
+    cd dicke
+
+Then, run the environment script
+
+    source ../env.sh
+
+You should be all set. You can run scripts with
+
+    python [script_name.py] --[flags as defined in script]
+
+
 # Misc. notes
 
 ## Conversion into .py scripts
