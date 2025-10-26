@@ -6,7 +6,9 @@ pip install --no-index --upgrade pip
 
 echo "Activating system modules and virtual environment ..."
 
-source env.sh
+cd dicke
+
+source ../env.sh
 
 echo "Installing packages for the first time ..."
 echo "numpy, matplotlib, qiskit, qiskit_aer, scipy, setuptool, tqdm from local index"
