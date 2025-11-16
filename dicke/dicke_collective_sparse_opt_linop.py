@@ -59,17 +59,21 @@ def build_single_bin_hamiltonian(N: int, omega: float, theta_v: float, mu: float
     Jx, Jy, Jz = spin_matrices(S)
     Bx = np.sin(2 * theta_v); Bz = -np.cos(2 * theta_v)
     dim = Jx.shape[0]
-    
+
     def _dot(A, v): return A.dot(v) if hasattr(A, "dot") else (A @ v)
-    
+
     def _mv(v):
         v = np.asarray(v, np.complex128).reshape(-1)
         out = omega * (Bx * _dot(Jx, v) + Bz * _dot(Jz, v))
         if mu != 0.0:
             out = out + mu * (_dot(Jx, _dot(Jx, v)) + _dot(Jy, _dot(Jy, v)) + _dot(Jz, _dot(Jz, v)))
         return out
-    
+
     H = LinearOperator((dim, dim), matvec=_mv, dtype=np.complex128)
+    # Cache trace(A) for A = -i H to avoid repeated trace estimation in expm_multiply.
+    # Here H has trace mu * S * (S+1) * (2S+1) in the S=N/2 irreducible representation.
+    trace_H = mu * S * (S + 1.0) * dim
+    H.traceA = -1j * trace_H
     return H, (Jx, Jy, Jz), [S], [int(2*S+1)]
 
 
@@ -113,9 +117,9 @@ def build_multi_bin_hamiltonian(N_list, omega_list, theta_v: float, mu: float):
         Jz_list.append(kron_on_slot(Jz, a, dims))
     dim = int(np.prod(dims))
     Bx = np.sin(2 * theta_v); Bz = -np.cos(2 * theta_v)
-    
+
     def _dot(A, v): return A.dot(v) if hasattr(A, "dot") else (A @ v)
-    
+
     def _mv(v):
         v = np.asarray(v, np.complex128).reshape(-1)
         out = np.zeros_like(v, dtype=np.complex128)
@@ -130,8 +134,11 @@ def build_multi_bin_hamiltonian(N_list, omega_list, theta_v: float, mu: float):
                     out = out + mu * _dot(Jy_list[a], _dot(Jy_list[b], v))
                     out = out + mu * _dot(Jz_list[a], _dot(Jz_list[b], v))
         return out
-    
+
     H = LinearOperator((dim, dim), matvec=_mv, dtype=np.complex128)
+    # Multi-bin Hamiltonian (with only cross-bin interactions) is traceless,
+    # so trace(A) = trace(-i H) = 0. Cache this to skip trace estimation.
+    H.traceA = 0.0
     return H, (Jx_list, Jy_list, Jz_list), S_list, dims
 
 
@@ -158,7 +165,9 @@ def evolve_times(H, psi0, t_grid):
     # Ensure psi0 is dense
     psi0 = np.asarray(psi0, dtype=np.complex128).flatten()
     t0, t1 = float(t_grid[0]), float(t_grid[-1]); num = len(t_grid)
-    
+    # Optional cached trace(A) for A = -i H to avoid repeated trace estimation
+    traceA = getattr(H, "traceA", None)
+
     # If H is a LinearOperator, wrap -i*H as another LinearOperator
     # Otherwise, use -1j*H directly (works for arrays/sparse matrices)
     if isinstance(H, LinearOperator):
@@ -173,7 +182,7 @@ def evolve_times(H, psi0, t_grid):
         )
     else:
         A = -1j * H
-    Y = expm_multiply(A, psi0, start=t0, stop=t1, num=num, endpoint=True)
+    Y = expm_multiply(A, psi0, start=t0, stop=t1, num=num, endpoint=True, traceA=traceA)
     return np.asarray(Y)
 
 
@@ -206,6 +215,8 @@ def evolve_times_stream(H, psi0, t_grid, *, chunk=64, normalize=False):
     from scipy.sparse.linalg import expm_multiply as _expm_multiply, LinearOperator
     
     H_is_linop = isinstance(H, LinearOperator)
+    # Optional cached trace(A) for A = -i H to avoid repeated trace estimation
+    traceA = getattr(H, "traceA", None)
     
     # Prepare initial
     psi = _np.asarray(psi0, dtype=_np.complex128).reshape(-1)
@@ -231,7 +242,7 @@ def evolve_times_stream(H, psi0, t_grid, *, chunk=64, normalize=False):
                 )
             else:
                 A = -1j * H
-            Y = _expm_multiply(A, psi, start=0.0, stop=rel_stop, num=n_block+1, endpoint=True)
+            Y = _expm_multiply(A, psi, start=0.0, stop=rel_stop, num=n_block+1, endpoint=True, traceA=traceA)
             for k in range(1, n_block+1):
                 psi = _np.asarray(Y[k]).reshape(-1)
                 if normalize: psi = psi / _np.linalg.norm(psi)
@@ -250,7 +261,7 @@ def evolve_times_stream(H, psi0, t_grid, *, chunk=64, normalize=False):
                 )
             else:
                 A = -1j * H
-            Y = _expm_multiply(A, psi, start=0.0, stop=dt, num=2, endpoint=True)
+            Y = _expm_multiply(A, psi, start=0.0, stop=dt, num=2, endpoint=True, traceA=traceA)
             psi = _np.asarray(Y[-1]).reshape(-1)
             if normalize: psi = psi / _np.linalg.norm(psi)
             i += 1
