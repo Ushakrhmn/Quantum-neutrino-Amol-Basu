@@ -309,8 +309,7 @@ for j in [0, -1]:
 plt.clf()
 
 plt.text(0.9, 0.9, f"$\\theta = {(theta / np.pi * 180):.2f}$", transform=plt.gca().transAxes, fontsize=16)
-
-# In[144]:
+plt.text(0.9, 0.8, f"$J = {J[0, 0]}$", transform=plt.gca().transAxes, fontsize=16)
 
 plt.plot(L_table, 0.5*(1+MFT_P_table[0,2,:]), ls=':', lw=3, color='blue')
 plt.plot(L_table, 0.5*(1+MFT_P_table[-1,2,:]), ls=':', lw=3, color='orange')

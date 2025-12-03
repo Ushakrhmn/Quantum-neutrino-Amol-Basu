@@ -1,9 +1,10 @@
 import mft
-import dicke_collective_sparse_opt_linop as dc  # optimized streaming API
+import dicke_collective_sparse_opt as dc  # optimized streaming API
 import numpy as np
 from datetime import datetime
 
 from matplotlib import pyplot as plt
+import tdvp_solver as tdvp
 
 # -----
 # Defining physical parameters
@@ -61,7 +62,7 @@ omega1, omega2 = dmsq / (2*args.energy1), dmsq / (2*args.energy2)
 n = n1 + n2
 
 # uniform strength across bins
-j = args.j * np.ones((n, n))
+j = args.j * np.ones((n, n)) / n
 
 # np.fill_diagonal(j, 0) # no self-interaction
 
@@ -96,7 +97,7 @@ H, (Jx_list, Jy_list, Jz_list), S_list, dims = dc.build_multi_bin_hamiltonian(
     N_list=[int(2*S) for S in S_list],
     omega_list=[omega1, omega2],
     theta_v=theta,
-    mu=args.j
+    mu=args.j / n
 )
 
 print("Evolving (streaming) ...")
@@ -104,6 +105,20 @@ print("Evolving (streaming) ...")
 print("Streaming evolution + on-the-fly observables ...")
 t_stream, dc_p_e = dc.compute_pe_stream(H, psi0, l_table, Jz_list, S_list, chunk=args.chunk, normalize=args.normalize)
 print("Calculated probabilities via streaming.")
+
+
+# -----
+# TDVP (coherent-forward) curve
+# -----
+print("Evaluating TDVP (coherent-forward) ...")
+t_tdvp, tdvp_p_e, _tdvp_S = tdvp.tdvp_from_emu2bin_args(
+    args.e1, args.e2, args.m1, args.m2,
+    args.energy1, args.energy2,
+    args.j, args.l, args.s,
+    theta_v=theta, substeps=2, return_entropy=True
+)
+print("TDVP evaluated.")
+
 
 print("Dicke solution evaluated.")
 
@@ -117,6 +132,10 @@ import matplotlib.pyplot as plt
 plt.figure(figsize=(10,6))
 plt.plot(t_stream, dc_p_e[:,0], label=f'Bin 1 (N={int(2*S_list[0])}, E={args.energy1:.2f})', color="blue")
 plt.plot(t_stream, dc_p_e[:,1], label=f'Bin 2 (N={int(2*S_list[1])}, E={args.energy2:.2f})', color="red")
+
+plt.plot(t_tdvp, tdvp_p_e[:,0], label='Bin 1 (TDVP)', linestyle=':', linewidth=2)
+plt.plot(t_tdvp, tdvp_p_e[:,1], label='Bin 2 (TDVP)', linestyle=':', linewidth=2)
+
 plt.xlabel('baseline')
 plt.ylabel('Pe')
 plt.legend()
@@ -134,6 +153,10 @@ ax1.plot(t_stream, dc_p_e[:,0], label=f'Bin 1 (N={int(2*S_list[0])}, E={args.ene
 ax1.plot(t_stream, dc_p_e[:,1], label=f'Bin 2 (N={int(2*S_list[1])}, E={args.energy2:.2f})', color="red")
 ax1.plot(l_table, mft_p_e[0], label=f'Bin 1 (MFT)', color="blue", ls="--")
 ax1.plot(l_table, mft_p_e[1], label=f'Bin 2 (MFT)', color="red", ls="--")
+
+ax1.plot(t_tdvp, tdvp_p_e[:,0], label='Bin 1 (TDVP)', color="blue", ls=":")
+ax1.plot(t_tdvp, tdvp_p_e[:,1], label='Bin 2 (TDVP)', color="red",  ls=":")
+
 ax1.legend()
 ax1.set_xlabel('baseline')
 ax1.set_ylabel('Pe')
@@ -149,6 +172,13 @@ residual1 = mft_p_e[0] - dc_p_e[:,0]
 ax2.plot(t_stream, residual1, label="Residual (Bin 1)", color="blue")
 residual2 = mft_p_e[1] - dc_p_e[:,1]
 ax2.plot(t_stream, residual2, label="Residual (Bin 2)", color="red")
+
+# Also show MFT - TDVP residuals (should be tiny)
+residual1_tdvp = mft_p_e[0] - tdvp_p_e[:,0]
+ax2.plot(t_tdvp, residual1_tdvp, label="Residual TDVP (Bin 1)", color="blue", ls=":")
+residual2_tdvp = mft_p_e[1] - tdvp_p_e[:,1]
+ax2.plot(t_tdvp, residual2_tdvp, label="Residual TDVP (Bin 2)", color="red", ls=":")
+
 ax2.legend()
 ax2.set_xlabel('baseline')
 ax2.set_ylabel('Residuals (MFT - Dicke)')
@@ -170,3 +200,94 @@ output_filename = f'emu_{timestamp}_n{n}.png'
 plt.savefig(output_filename)
 print(f"Plot saved to {output_filename}")
 plt.show()
+
+
+# =====================================================================
+# Lilith add-on: Dicke single-particle entanglement entropy (per bin)
+# Definition matches Patwardhan et al. (2021): S = -∑ λ log λ with
+# λ± = (1 ± r)/2, r = 2 |<J>| / N_a ; natural logs (nats).
+# This uses the Dicke wavefunction |psi(t)> evolved in the symmetric
+# subspace and computes <Jx>,<Jy>,<Jz> for each bin along the same
+# time grid used for the main plot. Saved as a separate PNG.
+# =====================================================================
+
+def _binary_entropy_nats(p, eps=1e-12):
+    p = np.clip(p, 0.0, 1.0)
+    q = 1.0 - p
+    vals = 0.0
+    if p > eps:
+        vals -= p * np.log(p)
+    if q > eps:
+        vals -= q * np.log(q)
+    return float(vals)
+
+def _entropy_from_J_expectations(Jx, Jy, Jz, N):
+    # r = 2 |<J>| / N  ; clip for numerical safety
+    r = float(2.0 * np.sqrt(Jx*Jx + Jy*Jy + Jz*Jz) / max(N, 1))
+    r = float(np.clip(r, 0.0, 1.0))
+    lam_p = 0.5*(1.0 + r)
+    # H2 in nats
+    return _binary_entropy_nats(lam_p)
+
+def _compute_entropy_stream(H, psi0, t_grid, Jx_list, Jy_list, Jz_list, S_list, *, chunk=64, normalize=False):
+    # Stream the Dicke state and return t_grid and S_single(t) for each bin (list of arrays).
+    stream = dc.evolve_times_stream(H, psi0, t_grid, chunk=chunk, normalize=normalize)
+    K = len(S_list)
+    N_list = [int(2*S) for S in S_list]
+    t_acc = []
+    S_acc = [[] for _ in range(K)]
+    for (t, psi) in stream:
+        t_acc.append(t)
+        psi_col = psi.reshape(-1, 1)
+        for a in range(K):
+            # Use sparse dot if available
+            Jx = Jx_list[a]; Jy = Jy_list[a]; Jz = Jz_list[a]
+            if hasattr(Jx, 'dot'):
+                jx = (np.vdot(psi, (Jx.dot(psi_col)).ravel())).real
+                jy = (np.vdot(psi, (Jy.dot(psi_col)).ravel())).real
+                jz = (np.vdot(psi, (Jz.dot(psi_col)).ravel())).real
+            else:
+                jx = (np.vdot(psi, Jx @ psi)).real
+                jy = (np.vdot(psi, Jy @ psi)).real
+                jz = (np.vdot(psi, Jz @ psi)).real
+            S_acc[a].append(_entropy_from_J_expectations(jx, jy, jz, N_list[a]))
+    return np.asarray(t_acc, float), [np.asarray(S_acc[a], float) for a in range(K)]
+
+try:
+    # Time grid: try to reuse the existing l_table if present; otherwise rebuild from args
+    try:
+        t_grid_for_entropy = l_table  # should be a 1D array used on the main P_ee plot
+    except NameError:
+        # Fallback: if not present, try reconstructing a linear grid
+        steps = getattr(args, "steps", 256)
+        L = getattr(args, "l", 10.0)
+        t_grid_for_entropy = np.linspace(0.0, L, int(steps))
+
+    # Compute entanglement entropies for each bin (in nats)
+    # Requires H, psi0, Jx_list, Jy_list, Jz_list, S_list to exist (already built above)
+    t_S, S_bins = _compute_entropy_stream(
+        H, psi0, t_grid_for_entropy,
+        Jx_list, Jy_list, Jz_list, S_list,
+        chunk=getattr(args, "chunk", 64),
+        normalize=getattr(args, "normalize", False)
+    )
+
+    # Plot to a separate figure and save with matching timestamp-based name
+    n_total = int(2*sum(S_list))
+    fig_S, axS = plt.subplots(figsize=(10, 6))
+    for a, S_curve in enumerate(S_bins, start=1):
+        axS.plot(t_S, S_curve, label=f"Bin {a} (N={int(2*S_list[a-1])})")
+    axS.set_xlabel("baseline")
+    axS.set_ylabel("Single-particle entanglement entropy (nats)")
+    axS.set_title("Dicke single-particle entanglement entropy per bin")
+    axS.grid(True, alpha=0.3)
+    axS.legend()
+
+    # Save to a separate file next to the main figure
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    entropy_filename = f'emu_entropy_{timestamp}_n{n_total}.png'
+    plt.tight_layout()
+    fig_S.savefig(entropy_filename, dpi=150)
+    print(f"[Lilith] Entropy plot saved to {entropy_filename}")
+except Exception as _e:
+    print(f"[Lilith] Skipped entropy computation due to: {_e}")

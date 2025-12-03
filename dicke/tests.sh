@@ -1,6 +1,8 @@
 #!/bin/bash
 #SBATCH --account=def-nilic 
-#SBATCH --mem=100G               # memory per node
-#SBATCH --time=0-2:00:00
+#SBATCH --mem=128G               # memory per node
+#SBATCH --time=1-00:00:00
 
-python emu_2bin_qc_comp.py --j 0.25 --l 15 --s 128 --e1 4 --e2 8 --m1 8 --m2 4 --f 8
+source ../env.sh
+
+python stepwise_mft_validation.py --e1 2000 --m2 2000 --j 5.0 --steps 2048

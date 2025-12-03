@@ -34,12 +34,9 @@ from scipy.sparse.linalg import eigs, eigsh, expm as sparse_expm, expm_multiply
 
 from tqdm import tqdm
 import gc
-import os
-from scipy.sparse import eye as sparse_eye, kron as sparse_kron, csr_matrix, lil_matrix, csr_array
-from scipy.sparse.linalg import LinearOperator, expm_multiply
 
 # Default numeric type (memory-friendly)
-DEFAULT_DTYPE = np.complex128
+DEFAULT_DTYPE = np.complex64
 
 
 # ---------- Spin algebra (Dicke basis) ----------
@@ -117,159 +114,47 @@ def product_dicke_state(S_list, m_list, dtype: np.dtype = DEFAULT_DTYPE):
         vec = sparse_kron(vec, v)
     return vec
 
-# === Memory-lean linear-operator helpers (default path) ===
-
-# Toggle with env var: set DICKE_USE_LINEAR_OPERATOR=0 to force explicit sparse matrices (legacy behavior)
-USE_LINEAR_OPERATOR_DEFAULT = os.environ.get("DICKE_USE_LINEAR_OPERATOR", "1") != "0"
-
-def _apply_on_slot(vec, op, slot, dims, *, dtype=None):
-    """
-    Apply a single-bin operator `op` (shape d_slot x d_slot) to the `slot`-th axis
-    of a flattened tensor-product state `vec` with per-bin dimensions `dims`.
-    Returns a 1D array with the same shape as `vec`.
-
-    This avoids materializing the full Kronecker-lifted operator.
-    """
-    import numpy as _np
-    v = _np.asarray(vec, dtype=dtype if dtype is not None else getattr(vec, "dtype", None)).reshape(dims, order="C")
-    # bring target axis in front: (d_slot, ...rest...)
-    v = _np.moveaxis(v, slot, 0)
-    d_slot = dims[slot]
-    rest = int(_np.prod(dims) // d_slot)
-    v2 = v.reshape(d_slot, rest)
-    # sparse or dense multiply along the leading axis
-    if hasattr(op, "dot"):
-        w2 = op.dot(v2)
-    else:
-        w2 = op @ v2
-    # reshape back
-    w = w2.reshape((d_slot,)+tuple(d for i, d in enumerate(dims) if i != slot))
-    w = _np.moveaxis(w, 0, slot)
-    return w.reshape(-1)
-
-def _lift_linear_op(op_local, slot, dims, *, dtype):
-    """
-    Return a LinearOperator acting on the *full* tensor space corresponding to
-    placing `op_local` on `slot` (Kronecker with identities elsewhere).
-    """
-    import numpy as _np
-    D = int(_np.prod(dims))
-    def _mv(x):
-        return _apply_on_slot(x, op_local, slot, dims, dtype=dtype)
-    # Hermitian single-site operators: rmatvec == matvec
-    return LinearOperator((D, D), matvec=_mv, rmatvec=_mv, dtype=dtype)
-
 # ---------- Hamiltonians ----------
 
 def build_single_bin_hamiltonian(N: int, omega: float, theta_v: float, mu: float, *, dtype: np.dtype = DEFAULT_DTYPE):
     """
-    Single-energy homogeneous gas (all-to-all equal coupling) in the Dicke subspace S=N/2.
-
-    **Default behavior (changed)**: returns a *LinearOperator* for the Hamiltonian to reduce
-    memory. Set environment variable ``DICKE_USE_LINEAR_OPERATOR=0`` to build an explicit
-    sparse matrix (legacy behavior). API (function signature & return tuple) remains unchanged.
-
-    Returns
-    -------
-    H : LinearOperator or scipy.sparse.spmatrix
-        Many-body Hamiltonian on the Dicke subspace.
-    (Jx_list, Jy_list, Jz_list) : tuple of sequences (length 1)
-        Slot-lifted operators for observables (LinearOperator by default).
-    S_list : list[float]
-        [S]
-    dims : list[int]
-        [2S+1]
+    Single-energy homogeneous gas (all-to-all equal coupling).
+    In the fully symmetric S=N/2 Dicke subspace.
+    
+    Returns sparse matrices to conserve memory for large systems.
     """
-    S = N / 2.0
+    S = N / 2.0 # N neutrino system, total spin S = N / 2
     Jx, Jy, Jz = spin_matrices(S, dtype=dtype)
-    d = int(2*S + 1)
 
+    # define the vacuum oscillation values
     Bx = np.sin(2 * theta_v)
     Bz = -np.cos(2 * theta_v)
-
-    if USE_LINEAR_OPERATOR_DEFAULT:
-        # Linear-operator Hamiltonian: H = ω(B·J) + μ(J·J) with J·J a constant phase in fixed-S,
-        # but we implement it as Jx^2 + Jy^2 + Jz^2 for exact legacy parity.
-        def _mv(v):
-            v = np.asarray(v, dtype=dtype, order="C").reshape(d)
-            out = omega * (Bx * (Jx.dot(v)) + Bz * (Jz.dot(v)))
-            if mu != 0:
-                out = out + mu * (Jx.dot(Jx.dot(v)) + Jy.dot(Jy.dot(v)) + Jz.dot(Jz.dot(v)))
-            return out
-        H = LinearOperator((d, d), matvec=_mv, rmatvec=_mv, dtype=dtype)
-        # Slot-lifted Js (single slot)
-        dims = [d]
-        JxL = _lift_linear_op(Jx, 0, dims, dtype=dtype)
-        JyL = _lift_linear_op(Jy, 0, dims, dtype=dtype)
-        JzL = _lift_linear_op(Jz, 0, dims, dtype=dtype)
-        return H, ([JxL], [JyL], [JzL]), [S], dims
-
-    # ---- Legacy explicit sparse matrix path ----
     H_vac = omega * (Bx * Jx + Bz * Jz)
-    H_int = mu * (Jx @ Jx + Jy @ Jy + Jz @ Jz)
-    H = (H_vac + H_int).tocsr()
-    return H, ([kron_on_slot(Jx, 0, [d])], [kron_on_slot(Jy, 0, [d])], [kron_on_slot(Jz, 0, [d])]), [S], [d]
+
+    # define the interaction term
+    J2 = Jx @ Jx + Jy @ Jy + Jz @ Jz
+    H_int = mu * J2
+
+    H = (H_vac + H_int).astype(dtype)
+    # Explicitly drop temporaries and collect
+    del J2, H_vac, H_int
+    gc.collect()
+    return H, (Jx, Jy, Jz), [S], [int(2*S+1)]
 
 def build_multi_bin_hamiltonian(N_list, omega_list, theta_v: float, mu: float, *, dtype: np.dtype = DEFAULT_DTYPE):
     """
     Multi-energy, single-angle equal coupling μ for all inter-bin pairs:
       H = Σ_a ω_a (B·J_a) + μ Σ_{a<b} J_a · J_b
     
-    **Default behavior**: returns a *LinearOperator* for the Hamiltonian to reduce
-    memory. Set environment variable ``DICKE_USE_LINEAR_OPERATOR=0`` to build an explicit
-    sparse matrix (legacy behavior).
-    
-    Returns
-    -------
-    H : LinearOperator or scipy.sparse.spmatrix
-        Many-body Hamiltonian on the multi-bin Dicke subspace.
-    (Jx_list, Jy_list, Jz_list) : tuple of sequences
-        Slot-lifted operators for observables (LinearOperator by default).
-    S_list : list[float]
-        Spin magnitudes for each bin
-    dims : list[int]
-        Dimensions [2S+1] for each bin
+    Returns sparse matrices to conserve memory for large systems.
     """
     assert len(N_list) == len(omega_list)
     S_list = [n / 2.0 for n in N_list]
 
     # Local spin matrices per bin (already sparse from spin_matrices)
     locals_ops = [spin_matrices(S, dtype=dtype) for S in S_list]
-    dims = [int(2*S + 1) for S in S_list]
+    dims = [ops[0].shape[0] for ops in locals_ops]
 
-    Bx = np.sin(2 * theta_v)
-    Bz = -np.cos(2 * theta_v)
-
-    if USE_LINEAR_OPERATOR_DEFAULT:
-        # LinearOperator mode: build operators slot-by-slot
-        Jx_list, Jy_list, Jz_list = [], [], []
-        for a, (Jx_loc, Jy_loc, Jz_loc) in enumerate(locals_ops):
-            Jx_list.append(_lift_linear_op(Jx_loc, a, dims, dtype=dtype))
-            Jy_list.append(_lift_linear_op(Jy_loc, a, dims, dtype=dtype))
-            Jz_list.append(_lift_linear_op(Jz_loc, a, dims, dtype=dtype))
-        
-        # Build Hamiltonian as a LinearOperator
-        D = int(np.prod(dims))
-        def _mv(v):
-            v = np.asarray(v, dtype=dtype, order="C")
-            out = np.zeros_like(v)
-            # Vacuum term: Σ_a ω_a (Bx J_x^a + Bz J_z^a)
-            for a, omega in enumerate(omega_list):
-                out = out + omega * Bx * Jx_list[a].matvec(v)
-                out = out + omega * Bz * Jz_list[a].matvec(v)
-            # Interaction term: μ Σ_{a<b} J_a · J_b
-            if mu != 0:
-                for a in range(len(N_list)):
-                    for b in range(a + 1, len(N_list)):
-                        out = out + mu * Jx_list[a].matvec(Jx_list[b].matvec(v))
-                        out = out + mu * Jy_list[a].matvec(Jy_list[b].matvec(v))
-                        out = out + mu * Jz_list[a].matvec(Jz_list[b].matvec(v))
-            return out
-        
-        H = LinearOperator((D, D), matvec=_mv, rmatvec=_mv, dtype=dtype)
-        return H, (Jx_list, Jy_list, Jz_list), S_list, dims
-    
-    # ---- Legacy explicit sparse matrix path ----
     # Lift to full space using sparse Kronecker products
     Jx_list, Jy_list, Jz_list = [], [], []
     for a, (Jx, Jy, Jz) in enumerate(locals_ops):
@@ -281,14 +166,18 @@ def build_multi_bin_hamiltonian(N_list, omega_list, theta_v: float, mu: float, *
     # Initialize Hamiltonian as sparse matrix
     H = csr_matrix((dim, dim), dtype=dtype)
 
+    # Vacuum field
+    Bx = np.sin(2 * theta_v)
+    Bz = -np.cos(2 * theta_v)
+
     # Vacuum term - accumulate in sparse format
     for a, omega in enumerate(omega_list):
-        H = H + omega * (Bx * Jx_list[a] + Bz * Jz_list[a])
+        H += omega * (Bx * Jx_list[a] + Bz * Jz_list[a])
 
     # ν–ν interaction: cross-bin only; intra-bin part is a constant in each S_a sector
     for a in range(len(N_list)):
         for b in range(a + 1, len(N_list)):
-            H = H + mu * (
+            H += mu * (
                 Jx_list[a] @ Jx_list[b] +
                 Jy_list[a] @ Jy_list[b] +
                 Jz_list[a] @ Jz_list[b]
@@ -296,12 +185,14 @@ def build_multi_bin_hamiltonian(N_list, omega_list, theta_v: float, mu: float, *
 
     return H, (Jx_list, Jy_list, Jz_list), S_list, dims
 
+# ---------- Evolution & observables ----------
+
 def evolve_times(H, psi0, t_grid, *, dtype: np.dtype = DEFAULT_DTYPE, gc_collect: bool = True):
     """Evolve psi0 under Hamiltonian H for times in t_grid.
 
     Parameters
     ----------
-    H : (N,N) array, sparse matrix, or LinearOperator
+    H : (N,N) array or sparse matrix
         Hamiltonian.
     psi0 : (N,) array
         Initial state.
@@ -315,23 +206,16 @@ def evolve_times(H, psi0, t_grid, *, dtype: np.dtype = DEFAULT_DTYPE, gc_collect
     """
     import numpy as np
     from scipy.sparse import csr_matrix
-    from scipy.sparse.linalg import expm_multiply, LinearOperator
+    from scipy.sparse.linalg import expm_multiply
 
-    # Handle H based on type - expm_multiply works with LinearOperators directly
-    if isinstance(H, LinearOperator):
-        # LinearOperator: use as-is (expm_multiply supports this)
-        pass
-    elif not isinstance(H, csr_matrix):
-        # Convert other types to csr_matrix
+    # Ensure H is csr_matrix (not csr_array)
+    if not isinstance(H, csr_matrix):
         H = csr_matrix(H)
-        H = H.astype(dtype)
-    else:
-        # Already csr_matrix, just ensure dtype
-        H = H.astype(dtype)
+    H = H.astype(dtype)
 
-    # Ensure psi0 is a dense 1D array (expm_multiply requires this)
+    # Ensure psi0 is a dense array (expm_multiply requires this)
     if hasattr(psi0, 'toarray'):
-        psi0 = np.asarray(psi0.toarray(), dtype=dtype).flatten()
+        psi0 = psi0.toarray().flatten().astype(dtype, copy=False)
     else:
         psi0 = np.asarray(psi0, dtype=dtype).flatten()
 
@@ -354,13 +238,11 @@ def bin_observables(states, Jz_list, S_list):
     For single bin: P_ee(t) = 1/2 * (1 + ⟨Jz⟩ / S).
     Jz_list should be a 1-tuple (Jz,).
     
-    Works with sparse Jz matrices and LinearOperators to conserve memory.
+    Works with sparse Jz matrices to conserve memory.
     """
-    from scipy.sparse.linalg import LinearOperator
-    
     if isinstance(Jz_list, tuple) and len(Jz_list) == 3:
-        # Single bin case we passed (Jx, Jy, Jz) - Jz is already a list
-        Jz_list = Jz_list[2]
+        # Single bin case we passed (Jx, Jy, Jz)
+        Jz_list = [Jz_list[2]]
     T = states.shape[0]
     K = len(S_list)
     Jz_t = np.zeros((T, K), dtype=float)
@@ -369,11 +251,8 @@ def bin_observables(states, Jz_list, S_list):
         psi = states[ti]  # This is now a flat array
         for a in range(K):
             Jz = Jz_list[a]
-            # Handle LinearOperator, sparse matrix, and dense matrix
-            if isinstance(Jz, LinearOperator):
-                # LinearOperator: use matvec (expects 1D vector, returns 1D)
-                jz = np.vdot(psi, Jz.matvec(psi)).real
-            elif hasattr(Jz, 'dot'):
+            # Handle both sparse and dense Jz matrices
+            if hasattr(Jz, 'dot'):
                 # Sparse matrix - convert psi to column vector for multiplication
                 psi_col = psi.reshape(-1, 1)
                 jz = np.vdot(psi, Jz.dot(psi_col).flatten()).real
@@ -478,3 +357,145 @@ if __name__ == "__main__":
     # Example: single-energy homogeneous gas (one Dicke spin)
     # Expect vacuum-like precession; μ adds only a phase in symmetric subspace.
     demo_single_bin(n1=1, n2=1, omega=1.0, theta_v=np.pi/2 - 0.2, mu=5.0)
+
+
+# ==================
+# Memory-light streaming extensions
+# ==================
+import numpy as _np
+from scipy.sparse.linalg import expm_multiply as _expm_multiply
+
+def evolve_times_stream(H, psi0, t_grid, *, chunk=64, normalize=False, dtype: _np.dtype = _np.complex64, gc_every: int = 1):
+    """
+    Generator: evolve |psi0> under sparse Hamiltonian H and yield |psi(t_k)> one-by-one.
+
+    Parameters
+    ----------
+    H : scipy.sparse.spmatrix (preferred) or LinearOperator
+        Many-body Hamiltonian. Must stay sparse; this routine never densifies it.
+    psi0 : (D,) complex ndarray
+        Initial state vector (dense). Will NOT be stored over all times.
+    t_grid : 1D ndarray (assumed monotonic; typically linspace)
+        Sample times (or baselines). If not strictly linear spacing, the generator
+        will still step in the provided order using piecewise segments.
+    chunk : int, optional
+        Number of points to compute in each internal block with a single
+        expm_multiply call. Increases throughput while keeping memory O(D).
+    normalize : bool, optional
+        If True, L2-normalize |psi> after every step (useful to tame round-off).
+
+    Yields
+    ------
+    (t, psi) : tuple[float, ndarray]
+        The time and the state at that time. The yielded state is a *copy*
+        so the caller can safely mutate it.
+    """
+    t_grid = _np.asarray(t_grid, dtype=float)
+    if t_grid.ndim != 1 or t_grid.size < 1:
+        raise ValueError("t_grid must be a 1D array with at least 1 element.")
+    H = H.tocsr() if hasattr(H, 'tocsr') else H
+    if hasattr(H, 'astype'):
+        H = H.astype(dtype)
+    if hasattr(psi0, "toarray"):
+        psi = psi0.toarray().ravel().astype(dtype, copy=False)
+    else:
+        psi = _np.asarray(psi0, dtype=dtype).reshape(-1)
+    # Emit initial state
+    yield (float(t_grid[0]), psi.copy())
+
+    # Work through t_grid in blocks; use relative times within each block
+    i = 0
+    # If grid is not strictly linear, we step point by point to respect provided grid
+    def _is_uniform(arr):
+        if arr.size < 3:
+            return True
+        d = _np.diff(arr)
+        return _np.allclose(d, d[0])
+
+    uniform = _is_uniform(t_grid)
+    N = t_grid.size
+    while i < N - 1:
+        if uniform:
+            # Use a block for throughput on uniform grid
+            n_block = min(chunk, N - 1 - i)  # number of *next* points to compute
+            t0 = float(t_grid[i])
+            t1 = float(t_grid[i + n_block])
+            # expm_multiply with relative interval [0, t1 - t0]
+            rel_stop = t1 - t0
+            # num = n_block + 1 because we include the starting state at t0 as the first sample
+            Y = _expm_multiply(_np.array(-1j, dtype=dtype).item() * H, psi, start=0.0, stop=rel_stop, num=n_block + 1, endpoint=True)
+            # Y has shape (n_block+1, D); first row is psi at t0
+            for k in range(1, n_block + 1):
+                psi = _np.asarray(Y[k], dtype=dtype).reshape(-1)  # next state
+                if normalize:
+                    psi = psi / _np.linalg.norm(psi)
+                yield (float(t_grid[i + k]), psi.copy())
+                if gc_every and (k % gc_every == 0):
+                    gc.collect()
+            i += n_block
+        else:
+            # Non-uniform grid: advance one step at a time with a 2-sample call
+            dt = float(t_grid[i + 1] - t_grid[i])
+            Y = _expm_multiply(_np.array(-1j, dtype=dtype).item() * H, psi, start=0.0, stop=dt, num=2, endpoint=True)
+            psi = _np.asarray(Y[-1], dtype=dtype).reshape(-1)
+            if normalize:
+                psi = psi / _np.linalg.norm(psi)
+            i += 1
+            yield (float(t_grid[i]), psi.copy())
+            if gc_every and (i % gc_every == 0):
+                gc.collect()
+
+
+def observables_from_stream(states_stream, Jz_list, S_list):
+    """
+    Consume a state stream and compute bin-resolved ⟨Jz⟩ and P_ee on the fly.
+
+    Parameters
+    ----------
+    states_stream : iterable of (t, psi)
+        A stream produced by `evolve_times_stream` (or any generator yielding (t, psi)).
+    Jz_list : sequence of sparse matrices
+        Jz for each bin (each kept sparse).
+    S_list : sequence of float
+        Spin magnitudes S for each bin.
+
+    Returns
+    -------
+    t : (T,) ndarray
+    Jz_t : (T, K) ndarray
+    P_ee : (T, K) ndarray
+    """
+    # Allow (Jx, Jy, Jz) tuple as legacy
+    if isinstance(Jz_list, tuple) and len(Jz_list) == 3:
+        Jz_list = [Jz_list[2]]
+    K = len(S_list)
+    t_acc = []
+    Jz_acc = []
+    Pee_acc = []
+    for t, psi in states_stream:
+        t_acc.append(float(t))
+        # compute ⟨Jz⟩ for each bin without densifying Jz
+        jz_row = []
+        pee_row = []
+        # Ensure 2D column for sparse dot
+        psi_col = psi.reshape(-1, 1)
+        for a in range(K):
+            Jz = Jz_list[a]
+            if hasattr(Jz, 'dot'):
+                jz_val = (_np.vdot(psi, (Jz.dot(psi_col)).ravel())).real
+            else:
+                jz_val = (_np.vdot(psi, Jz @ psi)).real
+            jz_row.append(jz_val)
+            pee_row.append(0.5 * (1.0 + jz_val / S_list[a]))
+        Jz_acc.append(jz_row)
+        Pee_acc.append(pee_row)
+    return _np.asarray(t_acc, float), _np.asarray(Jz_acc, float), _np.asarray(Pee_acc, float)
+
+
+def compute_pe_stream(H, psi0, t_grid, Jz_list, S_list, *, chunk=64, normalize=False, dtype: _np.dtype = _np.complex64, gc_every: int = 1):
+    """
+    Convenience wrapper: stream evolution and return only P_ee(t) (no states kept).
+    """
+    stream = evolve_times_stream(H, psi0, t_grid, chunk=chunk, normalize=normalize, dtype=dtype, gc_every=gc_every)
+    t, Jz_t, P_ee = observables_from_stream(stream, Jz_list, S_list)
+    return t, P_ee

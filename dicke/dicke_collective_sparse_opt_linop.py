@@ -60,13 +60,26 @@ def build_single_bin_hamiltonian(N: int, omega: float, theta_v: float, mu: float
     Bx = np.sin(2 * theta_v); Bz = -np.cos(2 * theta_v)
     dim = Jx.shape[0]
 
-    def _dot(A, v): return A.dot(v) if hasattr(A, "dot") else (A @ v)
+    def _dot(A, v):
+        return A.dot(v) if hasattr(A, "dot") else (A @ v)
 
     def _mv(v):
         v = np.asarray(v, np.complex128).reshape(-1)
-        out = omega * (Bx * _dot(Jx, v) + Bz * _dot(Jz, v))
+        # Reuse J·v for both vacuum and interaction terms
+        Jxv = _dot(Jx, v)
+        Jyv = _dot(Jy, v)
+        Jzv = _dot(Jz, v)
+
+        # Vacuum term
+        out = omega * (Bx * Jxv + Bz * Jzv)
+
+        # Interaction term
         if mu != 0.0:
-            out = out + mu * (_dot(Jx, _dot(Jx, v)) + _dot(Jy, _dot(Jy, v)) + _dot(Jz, _dot(Jz, v)))
+            out = out + mu * (
+                _dot(Jx, Jxv) +
+                _dot(Jy, Jyv) +
+                _dot(Jz, Jzv)
+            )
         return out
 
     H = LinearOperator((dim, dim), matvec=_mv, dtype=np.complex128)
@@ -266,4 +279,36 @@ def evolve_times_stream(H, psi0, t_grid, *, chunk=64, normalize=False):
             if normalize: psi = psi / _np.linalg.norm(psi)
             i += 1
             yield (float(t_grid[i]), psi.copy())
+
+def observables_from_stream(stream, Jz_list, S_list):
+    """
+    Consume a (t, psi) stream and compute,
+    for each time,
+      - Jz expectation values for each bin
+      - electron flavor survival probabilities per bin:
+            P_e = 0.5*(1 + <Jz>/S)
+    Returns
+    -------
+    t_arr : (T,) array
+    Jz_t  : (T, nbins) array
+    P_e   : (T, nbins) array
+    """
+    times = []
+    Jz_vals = []
+    Pe_vals = []
+    for (t, psi) in stream:
+        psi = np.asarray(psi, dtype=np.complex128).ravel()
+        times.append(float(t))
+        Jz_row = []
+        Pe_row = []
+        for Jz, S in zip(Jz_list, S_list):
+            vec = Jz.dot(psi)
+            expJz = np.vdot(psi, vec).real
+            Jz_row.append(expJz)
+            Pe_row.append(0.5 * (1.0 + expJz / S))
+        Jz_vals.append(Jz_row)
+        Pe_vals.append(Pe_row)
+    return (np.asarray(times, dtype=float),
+            np.asarray(Jz_vals, dtype=float),
+            np.asarray(Pe_vals, dtype=float))
 

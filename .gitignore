@@ -7,3 +7,8 @@ SBN/circuit.txt
 .gitignore
 .DS_Store
 SBN/logs/*
+*.out
+*.log
+*.err
+*.eps
+

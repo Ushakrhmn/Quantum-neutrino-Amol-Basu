@@ -1,5 +1,5 @@
 import mft
-import dicke_collective as dc
+import dicke_collective_sparse as dc
 
 import numpy as np
 

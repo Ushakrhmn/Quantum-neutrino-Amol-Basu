@@ -14,6 +14,9 @@ import argparse
 parser = argparse.ArgumentParser(description="Set Ne and Nmu from command line")
 parser.add_argument('--e', type=int, default=1, help="N e")
 parser.add_argument('--m', type=int, default=1, help="N mu")
+parser.add_argument('--l', type=float, default=0.5, help="Baseline length")
+parser.add_argument('--s', type=int, default=128, help="Number of time steps")
+
 args = parser.parse_args()
 
 print(args.e)
