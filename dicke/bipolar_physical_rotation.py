@@ -177,7 +177,8 @@ def solve_dicke_physical(args, l_table, constants):
     omega2 = -constants['dmsq'] / (2.0 * args.energy2)
 
     # 1. Build Initial State (Iso-spin basis)
-    psi0, S_list = dc.multi_bin_initial_state([args.e, 0], [0, args.b])
+    # psi0, S_list = dc.multi_bin_initial_state([args.e, 0], [0, args.b])
+    psi0, S_list = dc.multi_bin_initial_state([args.e, args.b], [0, 0])
     
     # Note: Explicitly handling the is_antineutrino flag which was present in the original script
     # but not in the linop version.
@@ -193,11 +194,11 @@ def solve_dicke_physical(args, l_table, constants):
     # As defined in bipolar_rotation_check.py: U_flip = exp(-i * pi * Jy_bin2)
     # This maps the iso-spin initial state to the physical basis state
     print("[Dicke-Physical] Applying U_y rotation to initial state (using expm_multiply)...")
-    Jy_bin2 = Jy_list[1]
+    # Jy_bin2 = Jy_list[1]
     
     # CRITICAL FIX: Use expm_multiply to compute (e^A)v directly
     # This avoids creating the dense matrix e^A which causes efficiency warnings and hangs.
-    psi0 = expm_multiply(-1j * np.pi * Jy_bin2, psi0)
+    # psi0 = expm_multiply(-1j * np.pi * Jy_bin2, psi0)
     # ----------------------
 
     # 2. Evolution (Standard, not streaming)
