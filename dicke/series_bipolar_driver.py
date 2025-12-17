@@ -16,7 +16,7 @@ def main():
     parser.add_argument('--steps-per-run', type=int, default=None, help='Override steps-per-run from config')
     parser.add_argument('--max-steps', type=int, default=None, help='Maximum steps in this invocation')
     parser.add_argument('--no-clean-plots', action='store_true', help='Do not clean old plots')
-    parser.add_argument('--keep-last-N', type=int, default=1, help='Keep last N plots when cleaning')
+    parser.add_argument('--keep-last-N', type=int, default=2, help='Keep last N plots when cleaning')
     parser.add_argument('--budget-days', type=float, default=None, help='Walltime budget in days; driver will choose steps to fit the budget')
     parser.add_argument('--safety-seconds', type=float, default=1800, help='Safety margin (seconds) subtracted from budget')
     parser.add_argument('--warmup-steps', type=int, default=3, help='Warmup steps to estimate sec/step when no average is recorded')
@@ -71,9 +71,10 @@ def main():
     
     # Clean old plots
     if not args.no_clean_plots:
+        keep_n = max(1, args.keep_last_N)
         plot_files = sorted(glob.glob(str(run_folder / "plot_intermediate_*.png")))
-        if len(plot_files) > args.keep_last_N:
-            for filepath in plot_files[:-args.keep_last_N]:
+        if len(plot_files) > keep_n:
+            for filepath in plot_files[:-keep_n]:
                 try:
                     Path(filepath).unlink()
                 except Exception:
@@ -81,8 +82,6 @@ def main():
     
     # Determine steps to run (budgeted or fixed)
     remaining_steps = total_steps - completed_steps
-    steps_to_run = None
-    
     if args.budget_days is not None:
         budget_sec = max(0.0, args.budget_days * 86400.0 - args.safety_seconds)
         if budget_sec <= 0:
@@ -108,7 +107,7 @@ def main():
         if args.max_steps is not None:
             steps_budget = min(steps_budget, args.max_steps)
         steps_to_run = max(0, min(steps_budget, remaining_steps))
-        if steps_to_run <= 0:
+        if steps_to_run == 0:
             print(f"Budget too small for further steps. Estimated {avg_step_sec:.3f} sec/step; remaining budget {budget_sec:.1f}s.")
             sys.exit(0)
         

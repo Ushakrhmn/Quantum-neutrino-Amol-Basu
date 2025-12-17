@@ -49,11 +49,11 @@ def main():
     l_table = np.load(run_folder / "l_table.npy")
     if start_step > 0:
         start_idx = start_step + 1  # advance past last checkpoint to avoid duplicate
-        end_idx = min(start_idx + steps_to_evolve, len(l_table))
+        end_idx = start_idx + steps_to_evolve
     else:
         start_idx = 0
-        end_idx = min(start_idx + steps_to_evolve + 1, len(l_table))  # include initial point
-    t_slice = l_table[start_idx:end_idx]
+        end_idx = start_idx + steps_to_evolve + 1  # include initial point
+    t_slice = l_table[start_idx:min(end_idx, len(l_table))]
     
     psi_current = np.load(run_folder / progress["last_checkpoint"])
     if psi_current.shape[0] != hamiltonian_info["total_dim"]:
