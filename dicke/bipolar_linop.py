@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 
 import mft
-import dicke_linop as dc_linop
+import dicke_linop_v3 as dc_linop
 import dicke_collective_sparse_opt as dc
 
 
