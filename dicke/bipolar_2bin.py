@@ -100,7 +100,7 @@ H, (Jx_list, Jy_list, Jz_list), S_list, dims = dc.build_multi_bin_hamiltonian(
     N_list=[int(2*S) for S in S_list],
     omega_list=[omega1, omega2],
     theta_v=theta,
-    mu=args.j / n
+    mu=2 * args.j / n
 )
 
 states = dc.evolve_times(H, psi0, l_table)

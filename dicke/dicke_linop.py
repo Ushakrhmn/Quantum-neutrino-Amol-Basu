@@ -34,7 +34,7 @@ from __future__ import annotations
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
-from scipy.sparse import spmatrix
+from scipy.sparse import spmatrix, csr_array, kron as sparse_kron
 from scipy.sparse.linalg import LinearOperator, expm_multiply
 
 # Local (single-bin) spin operators in the Dicke basis.
@@ -571,3 +571,37 @@ def estimate_memory_usage(N_list: Sequence[int], *, lifted: bool = False) -> dic
             "memory_bytes": total_nnz * bytes_per_nnz,
             "memory_MB": total_nnz * bytes_per_nnz / (1024 * 1024),
         }
+
+
+# =============================================================================
+# Initial State Construction
+# =============================================================================
+
+def dicke_basis_vector(S: float, m: float):
+    """Return |S,m> as a sparse column vector in the Dicke basis."""
+    d = int(2 * S + 1)
+    idx = int(m + S)
+    v = csr_array(([1.0 + 0.0j], ([idx], [0])), shape=(d, 1), dtype=complex)
+    return v
+
+
+def product_dicke_state(S_list, m_list):
+    """Return ⊗_a |S_a, m_a> as a sparse column vector."""
+    vec = csr_array([[1.0 + 0.0j]])
+    for S, m in zip(S_list, m_list):
+        vec = sparse_kron(vec, dicke_basis_vector(S, m))
+    return vec
+
+
+def multi_bin_initial_state(n1_list, n2_list):
+    """⊗_a |S_a, m_a> where S_a=(n1_a+n2_a)/2 and m_a=(n1_a-n2_a)/2."""
+    assert len(n1_list) == len(n2_list)
+    S_list, m_list = [], []
+    for n1, n2 in zip(n1_list, n2_list):
+        N = n1 + n2
+        S = N / 2.0
+        m = (n1 - n2) / 2.0
+        S_list.append(S)
+        m_list.append(m)
+    psi0 = product_dicke_state(S_list, m_list)
+    return psi0, S_list
