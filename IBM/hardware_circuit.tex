@@ -1,0 +1,12 @@
+\documentclass[border=2px]{standalone}
+
+\usepackage[braket, qm]{qcircuit}
+\usepackage{graphicx}
+
+\begin{document}
+\scalebox{1.0}{{$\mathrm{global\,phase:\,} \mathrm{\frac{5\pi}{4}}$}
+\Qcircuit @C=1.0em @R=0.2em @!R { \\
+	 	\nghost{{q}_{0}\;\mapsto\;{0} :  } & \lstick{{q}_{0}\;\mapsto\;{0} :  } & \gate{\mathrm{R_Z}\,(\mathrm{\frac{\pi}{2}})} & \gate{\mathrm{\sqrt{X}}} & \gate{\mathrm{R_Z}\,(\mathrm{\frac{\pi}{2}})} & \ctrl{1} & \qw & \qw & \qw & \qw & \qw & \ctrl{1} & \gate{\mathrm{\sqrt{X}}} & \gate{\mathrm{R_Z}\,(\mathrm{\frac{\pi}{2}})} & \ctrl{1} & \qw & \qw & \qw & \qw & \qw & \ctrl{1} & \gate{\mathrm{\sqrt{X}}} & \ctrl{1} & \qw & \qw & \qw & \qw & \qw & \ctrl{1} & \qw & \qw & \qw & \qw & \qw\\
+	 	\nghost{{q}_{1}\;\mapsto\;{1} :  } & \lstick{{q}_{1}\;\mapsto\;{1} :  } & \gate{\mathrm{X}} & \qw & \qw & \control\qw & \gate{\mathrm{R_Z}\,(\mathrm{\frac{\pi}{2}})} & \gate{\mathrm{\sqrt{X}}} & \gate{\mathrm{R_Z}\,(\mathrm{-3.136})} & \gate{\mathrm{\sqrt{X}}} & \gate{\mathrm{R_Z}\,(\mathrm{\frac{\pi}{2}})} & \control\qw & \gate{\mathrm{R_Z}\,(\mathrm{\frac{\pi}{2}})} & \gate{\mathrm{\sqrt{X}}} & \control\qw & \gate{\mathrm{R_Z}\,(\mathrm{\frac{\pi}{2}})} & \gate{\mathrm{\sqrt{X}}} & \gate{\mathrm{R_Z}\,(\mathrm{-3.136})} & \gate{\mathrm{\sqrt{X}}} & \gate{\mathrm{R_Z}\,(\mathrm{\frac{\pi}{2}})} & \control\qw & \gate{\mathrm{R_Z}\,(\mathrm{\frac{\pi}{2}})} & \control\qw & \gate{\mathrm{R_Z}\,(\mathrm{\frac{\pi}{2}})} & \gate{\mathrm{\sqrt{X}}} & \gate{\mathrm{R_Z}\,(\mathrm{-3.136})} & \gate{\mathrm{\sqrt{X}}} & \gate{\mathrm{R_Z}\,(\mathrm{\frac{\pi}{2}})} & \control\qw & \gate{\mathrm{R_Z}\,(\mathrm{\frac{\pi}{2}})} & \gate{\mathrm{\sqrt{X}}} & \gate{\mathrm{R_Z}\,(\mathrm{\frac{\pi}{2}})} & \qw & \qw\\
+\\ }}
+\end{document}

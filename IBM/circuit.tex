@@ -1,0 +1,13 @@
+\documentclass[border=2px]{standalone}
+
+\usepackage[braket, qm]{qcircuit}
+\usepackage{graphicx}
+
+\begin{document}
+\scalebox{1.0}{
+\Qcircuit @C=1.0em @R=0.2em @!R { \\
+	 	\nghost{{q}_{0} :  } & \lstick{{q}_{0} :  } & \gate{\mathrm{H}} & \qw & \ctrl{1} & \qw & \ctrl{1} & \gate{\mathrm{H}} & \gate{\mathrm{R_X}\,(\mathrm{\frac{\pi}{2}})} & \ctrl{1} & \qw & \ctrl{1} & \gate{\mathrm{R_X}\,(\mathrm{\frac{-\pi}{2}})} & \ctrl{1} & \qw & \ctrl{1} & \qw & \qw\\
+	 	\nghost{{q}_{1} :  } & \lstick{{q}_{1} :  } & \gate{\mathrm{U_3}\,(\mathrm{\pi,0,\pi})} & \gate{\mathrm{H}} & \targ & \gate{\mathrm{R_Z}\,(\mathrm{0.00564})} & \targ & \gate{\mathrm{H}} & \gate{\mathrm{R_X}\,(\mathrm{\frac{\pi}{2}})} & \targ & \gate{\mathrm{R_Z}\,(\mathrm{0.00564})} & \targ & \gate{\mathrm{R_X}\,(\mathrm{\frac{-\pi}{2}})} & \targ & \gate{\mathrm{R_Z}\,(\mathrm{0.00564})} & \targ & \qw & \qw\\
+	 	\nghost{\mathrm{{c} :  }} & \lstick{\mathrm{{c} :  }} & \lstick{/_{_{2}}} \cw & \cw & \cw & \cw & \cw & \cw & \cw & \cw & \cw & \cw & \cw & \cw & \cw & \cw & \cw & \cw\\
+\\ }}
+\end{document}
