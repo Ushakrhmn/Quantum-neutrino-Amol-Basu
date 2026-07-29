@@ -28,9 +28,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.integrate as integ
 
-from qiskit import QuantumCircuit, transpile
-from qiskit_aer import AerSimulator
 
+
+from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit, transpile
+from qiskit_aer import AerSimulator
 
 # In[ ]:
 
@@ -118,7 +119,15 @@ times = np.arange(0, n_steps_max + 1, sample_every) * dt
 # -----------------------------
 shots = 4096
 seed_simulator = 12345
-backend = AerSimulator(seed_simulator=seed_simulator)
+backend = AerSimulator(
+            method="matrix_product_state",
+            matrix_product_state_max_bond_dimension=16,
+            matrix_product_state_truncation_threshold=1e-8,
+
+    # Temporary workaround for Aer's false preflight estimate.
+            max_memory_mb=8_000_000,
+            seed_simulator=seed_simulator,
+        )
 
 # -----------------------------
 # Alpha cases
@@ -372,7 +381,7 @@ def run_many_body_qiskit(alpha, Ne, Nx, J, times, dt, shots, backend,
 
         qc.measure(range(N), range(N))
 
-        tqc = transpile(qc, backend, optimization_level=0)
+        tqc = transpile(qc, backend, optimization_level=1)
         counts = backend.run(tqc, shots=shots).result().get_counts()
 
         p1_t = [0.0] * N
@@ -638,6 +647,26 @@ plt.savefig(
     f"MB_vs_RS_Ne{Ne}_Nx{Nx}.pdf",
     bbox_inches="tight"
 )
+
+
+ax.plot(x, P_mb/Ne, "--o", color=color, label="MB")
+ax.plot(x, P_rs/Ne, "-", lw=2, color=color, label="RS")
+
+ax.set_title(rf"$\alpha={alpha_label}$")
+ax.grid(True)
+ax.legend()
+
+fig.supxlabel(xlabel)
+fig.supylabel(r"$\langle P(\nu_e\to\nu_\mu)/N_e\rangle_{N_e}$")
+fig.suptitle(rf"$N_e={Ne}$, $N_x={Nx}$", fontsize=15)
+
+plt.tight_layout(rect=[0, 0, 1, 0.96])
+#plt.show()
+plt.savefig(
+    f"MB_vs_RS_Ne{Ne}_Nx{Nx}_perNe.pdf",
+    bbox_inches="tight"
+)
+
 
 # ## Notes
 # 
