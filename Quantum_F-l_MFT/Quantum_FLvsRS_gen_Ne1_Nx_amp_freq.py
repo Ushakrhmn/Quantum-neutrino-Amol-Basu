@@ -350,9 +350,8 @@ def run_many_body_qiskit(alpha, Ne, Nx, J, times, dt, shots, backend,
 
         qc.measure(range(N), range(N))
 
-        tqc = transpile(qc, backend, optimization_level=0)
-        counts = backend.run(tqc, shots=shots).result().get_counts()
-
+        job = backend.run(qc, shots=shots)
+        counts = job.result().get_counts()
         p1_t = [0.0] * N
 
         for bitstring, c in counts.items():
