@@ -21,7 +21,7 @@
 # 
 # To check \(N_e=2\) later, change only `Ne` in Cell 1.
 
-# In[14]:
+# In[1]:
 
 
 import numpy as np
@@ -39,7 +39,7 @@ from qiskit.quantum_info import SparsePauliOp
 from qiskit_ibm_runtime import QiskitRuntimeService, EstimatorV2 as Estimator
 
 
-# In[15]:
+# In[2]:
 
 
 import argparse
@@ -78,7 +78,7 @@ if Ne < 1 or Nx < 1:
     raise ValueError("Ne and Nx must be positive integers.")
 
 
-# In[16]:
+# In[3]:
 
 
 # =============================
@@ -121,7 +121,7 @@ use_matter = False
 # -----------------------------
 dt = 0.001
 T_max = 10 #200.0
-sample_every = 2000
+sample_every = 1000
 
 n_steps_max = int(round(T_max / dt))
 times = np.arange(0, n_steps_max + 1, sample_every) * dt
@@ -132,7 +132,6 @@ times = np.arange(0, n_steps_max + 1, sample_every) * dt
 shots = 4096
 seed_simulator = 12345
 backend = AerSimulator(seed_simulator=seed_simulator)
-
 # -----------------------------
 # Alpha cases
 # -----------------------------
@@ -151,7 +150,7 @@ print(f"Number of sampled times = {len(times)}, T_max = {T_max}, dt = {dt}")
 print(f"Evolution mode: self-interaction only = {not use_vacuum and not use_matter}")
 
 
-# In[17]:
+# In[4]:
 
 
 # =======================================
@@ -166,7 +165,7 @@ J=1
 #print("J min/max =", J.min(), J.max())
 
 
-# In[18]:
+# In[5]:
 
 
 # =========================================
@@ -208,7 +207,7 @@ def add_interaction_evolution(qc, n, J, N, dt):
                 qc.rzz(phi, i, j)
 
 
-# In[19]:
+# In[6]:
 
 
 # Dicke State Block
@@ -976,7 +975,7 @@ def add_dicke_interaction_evolution(
                 )
 
 
-# In[20]:
+# In[7]:
 
 
 # ============================================
@@ -1073,7 +1072,7 @@ def P_osc_RS(t_table, theta, omega, lam, J, initial_flavors=None, alpha=None):
     )
 
 
-# In[21]:
+# In[8]:
 
 
 # =====================================================
@@ -1166,7 +1165,7 @@ def run_many_body_qiskit(alpha, Ne, Nx, J, times, dt, shots, backend,
     }
 
 
-# In[22]:
+# In[9]:
 
 
 # =====================================================
@@ -1266,7 +1265,7 @@ def run_alpha_case(alpha, verbose=True):
     }
 
 
-# In[23]:
+# In[10]:
 
 
 # =====================================================
@@ -1346,7 +1345,7 @@ def run_and_plot_alpha(alpha, alpha_label, fig_no=None, verbose=True, show_plot=
     return result
 
 
-# In[24]:
+# In[11]:
 
 
 # =====================================================
@@ -1614,7 +1613,7 @@ def run_dicke_qiskit(alpha, Ne, Nx, J, times, dt, shots, backend,
 
 
 
-# In[25]:
+# In[12]:
 
 
 import numpy as np
@@ -1906,7 +1905,9 @@ def collective_oscillation_probability(N1, N2, alpha, t, lam=1.0):
 
 
 # In[ ]:
-
+# ============================================================
+# Results and combined 2x2 plot
+# ============================================================
 
 alpha_cases = [
     (np.pi/2, r"\pi/2"),
@@ -1916,28 +1917,18 @@ alpha_cases = [
 ]
 
 P_mb = {}
-P_dicke = {}
 P_emu = {}
 
-fig, axes = plt.subplots(
-    2, 2,
-    figsize=(12, 9),
-    sharex=True,
-    sharey=True
-)
 
-axes = axes.flatten()
+# ============================================================
+# Calculate results
+# ============================================================
 
-colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+for alpha, alpha_label in alpha_cases:
 
-for ax, (alpha, alpha_label), color in zip(
-    axes, alpha_cases, colors
-):
-
-    # =====================================================
+    # --------------------------------------------------------
     # Conventional many-body quantum simulation
-    # =====================================================
-
+    # --------------------------------------------------------
     result_mb = run_and_plot_alpha(
         alpha,
         alpha_label,
@@ -1948,88 +1939,148 @@ for ax, (alpha, alpha_label), color in zip(
         result_mb["many_body"]["P_e_to_mu_avg"]
     )
 
-    # =====================================================
-    # Dicke-state quantum simulation
-    # =====================================================
 
-    result_dicke = run_dicke_qiskit(
-        alpha=alpha,
-        Ne=Ne,
-        Nx=Nx,
-        J=J,
-        times=times,
-        dt=dt,
-        shots=shots,
-        backend=backend,
-        verbose=True,
-    )
-
-    P_dicke[alpha_label] = (
-        result_dicke["P_e_to_x_avg"]
-    )
-
-    # =====================================================
+    # --------------------------------------------------------
     # Analytical result
-    # =====================================================
-    t = np.linspace(0, 10, 100)
+    # --------------------------------------------------------
     P = collective_oscillation_probability(
         N1=Ne,
         N2=Nx,
         alpha=alpha,
-        t=t,
+        t=times,
         lam=J
     )
 
     P_emu[alpha_label] = P
 
-    # =====================================================
-    # Plot
-    # =====================================================
+
+# ============================================================
+# Combined 2x2 plot
+# ============================================================
+
+fig, axes = plt.subplots(
+    2, 2,
+    figsize=(12, 9),
+    sharex=True,
+    sharey=True
+)
+
+axes = axes.flatten()
+# ============================================================
+# Plot each alpha case
+# ============================================================
+
+alpha_colors = {
+    r"\pi/2": "#1f77b4",   # blue
+    r"\pi/3": "#ff7f0e",   # orange
+    r"\pi/4": "#2ca02c",   # green
+    r"\pi/6": "#d62728",   # red
+}
+
+for ax, (alpha, alpha_label) in zip(axes, alpha_cases):
 
     x, xlabel = get_plot_time()
 
-    # Conventional QS: points only
+    color = alpha_colors[alpha_label]
+
+    # --------------------------------------------------------
+    # Conventional QS / Qiskit
+    # --------------------------------------------------------
     ax.plot(
         x,
         P_mb[alpha_label],
-        "o",
+        "o--",
         color=color,
-        linestyle="None",
-        label="Conventional QS"
+        linewidth=1.5,
+        markersize=7,
+        label="Qiskit"
     )
 
-    # Dicke QS: points only
+    # --------------------------------------------------------
+    # Analytical
+    # --------------------------------------------------------
     ax.plot(
         x,
-        P_dicke[alpha_label],
-        "s",
-        color=color,
-        linestyle="None",
-        label="Dicke QS"
-    )
-
-    # Analytical: continuous line
-    ax.plot(
-        t,
         P_emu[alpha_label],
         "-",
-        lw=2,
         color=color,
+        linewidth=2,
         label="Analytical"
     )
 
-fig.supxlabel(xlabel)
+    # --------------------------------------------------------
+    # Alpha label
+    # --------------------------------------------------------
+    ax.set_title(
+        rf"$\alpha={alpha_label}$",
+        fontsize=13
+    )
+
+    # --------------------------------------------------------
+    # Grid
+    # --------------------------------------------------------
+    ax.grid(
+        True,
+        axis="both",
+        which="major",
+        linestyle="-",
+        linewidth=0.8,
+        alpha=0.6
+    )
+
+    # --------------------------------------------------------
+    # Legend in every panel
+    # --------------------------------------------------------
+    ax.legend(
+        loc="upper right",
+        fontsize=9
+    )
+
+
+# ============================================================
+# Shared x and y labels
+# ============================================================
+
+fig.supxlabel(
+    "Total time",
+    fontsize=14
+)
+
 fig.supylabel(
-r"$\langle P(\nu_e\to\nu_\mu)\rangle_{N_e}$"
+    r"$\left\langle P(\nu_e\rightarrow\nu_\mu)\right\rangle_{N_e}$",
+    fontsize=14
 )
+
+
+# ============================================================
+# Overall title
+# ============================================================
+
 fig.suptitle(
-rf"$N_e={Ne}$, $N_x={Nx}$",
-fontsize=15
+    rf"$N_e={Ne},\;N_x={Nx}$",
+    fontsize=15
 )
+
+
+# ============================================================
+# Layout
+# ============================================================
+
 plt.tight_layout(
-rect=[0, 0, 1, 0.96]
+    rect=[0.04, 0.04, 1.0, 0.94]
 )
-plt.show()
 
 
-# ## 
+# ============================================================
+# Save figure
+# ============================================================
+
+filename = f"FL_analytical_Ne{Ne}_Nx{Nx}-dt0.001.png"
+
+plt.savefig(
+    filename,
+    dpi=300,
+    bbox_inches="tight"
+)
+
+plt.close(fig)

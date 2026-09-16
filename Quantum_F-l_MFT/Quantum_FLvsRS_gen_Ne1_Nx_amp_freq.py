@@ -106,8 +106,7 @@ backend = AerSimulator(
             matrix_product_state_truncation_threshold=1e-8,
 
     # Temporary workaround for Aer's false preflight estimate.
-            max_memory_mb=8_000_000,
-            seed_simulator=seed_simulator,
+            max_memory_mb=2**63 - 1,
         )
 
 # -----------------------------
@@ -738,7 +737,12 @@ hilbert_time_axis = "t_mu"
 amp_freq_records = []
 
 for Nx_here in Nx_scan:
-
+    backend = AerSimulator(
+        method="matrix_product_state",
+        matrix_product_state_max_bond_dimension=16,
+        matrix_product_state_truncation_threshold=1e-8,
+        max_memory_mb=2**63 - 1,
+    )
     Ne_here = fixed_Ne
     N_here = Ne_here + Nx_here
     mu_here = omega1 * N_here

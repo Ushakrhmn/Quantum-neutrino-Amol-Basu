@@ -1246,7 +1246,8 @@ fig.suptitle(
 )
 
 plt.tight_layout(rect=[0, 0, 1, 0.96])
-plt.show()
-
-
+#plt.show()
+# plt.show()   # don't need this on Compute
+filename = f"Analytic_vsRS_Ne{Ne}_Nx{Nx}.png"
+plt.savefig(filename, dpi=300, bbox_inches="tight")
 # ## 

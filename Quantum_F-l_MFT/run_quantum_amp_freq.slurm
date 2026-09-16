@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account=def-nilic
-#SBATCH --time=48:00:00
+#SBATCH --time=168:00:00
 #SBATCH --mem=256G
 #SBATCH --cpus-per-task=4
 #SBATCH --output=logs/%x_%j.out

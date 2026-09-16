@@ -119,9 +119,9 @@ use_matter = False
 # -----------------------------
 # Time / Trotter / sampling parameters
 # -----------------------------
-dt = 0.01
+dt = 0.1
 T_max = 10 #200.0
-sample_every = 100
+sample_every = 10
 
 n_steps_max = int(round(T_max / dt))
 times = np.arange(0, n_steps_max + 1, sample_every) * dt
@@ -1966,22 +1966,15 @@ fig, axes = plt.subplots(
 )
 
 axes = axes.flatten()
+
+
 # ============================================================
 # Plot each alpha case
 # ============================================================
 
-alpha_colors = {
-    r"\pi/2": "#1f77b4",   # blue
-    r"\pi/3": "#ff7f0e",   # orange
-    r"\pi/4": "#2ca02c",   # green
-    r"\pi/6": "#d62728",   # red
-}
-
 for ax, (alpha, alpha_label) in zip(axes, alpha_cases):
 
     x, xlabel = get_plot_time()
-
-    color = alpha_colors[alpha_label]
 
     # --------------------------------------------------------
     # Conventional QS / Qiskit
@@ -1990,7 +1983,6 @@ for ax, (alpha, alpha_label) in zip(axes, alpha_cases):
         x,
         P_mb[alpha_label],
         "o--",
-        color=color,
         linewidth=1.5,
         markersize=7,
         label="Qiskit"
@@ -2003,7 +1995,6 @@ for ax, (alpha, alpha_label) in zip(axes, alpha_cases):
         x,
         P_emu[alpha_label],
         "-",
-        color=color,
         linewidth=2,
         label="Analytical"
     )
@@ -2027,7 +2018,6 @@ for ax, (alpha, alpha_label) in zip(axes, alpha_cases):
         linewidth=0.8,
         alpha=0.6
     )
-
     # --------------------------------------------------------
     # Legend in every panel
     # --------------------------------------------------------
@@ -2069,13 +2059,11 @@ fig.suptitle(
 plt.tight_layout(
     rect=[0.04, 0.04, 1.0, 0.94]
 )
-
-
 # ============================================================
 # Save figure
 # ============================================================
 
-filename = f"FL_analytical_Ne{Ne}_Nx{Nx}-dt0.01.png"
+filename = f"FL_analytical_Ne{Ne}_Nx{Nx}.png"
 
 plt.savefig(
     filename,
