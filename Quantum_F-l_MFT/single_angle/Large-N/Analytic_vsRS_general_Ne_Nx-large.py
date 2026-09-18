@@ -908,10 +908,31 @@ def calculate_one_time_point(args):
 
 # =====================================================
 # CELL 7: Compare RS mean field with analytical result
-# Time points are calculated in parallel
+#
+# SLURM ARRAY VERSION
+#
+# 25 SLURM array tasks
+# 4 CPUs per task
+# 4 Python workers per task
+#
+# Each SLURM task handles its assigned time points.
+# The time points within each task are calculated
+# in parallel using ProcessPoolExecutor.
+#
+# Results are saved as CSV files in:
+#     output/
+#
+# The filename contains the time range handled by
+# that SLURM task.
 # =====================================================
 
 if __name__ == "__main__":
+
+    import pandas as pd
+
+    # -------------------------------------------------
+    # Alpha cases
+    # -------------------------------------------------
 
     alpha_cases = [
         (np.pi/2, r"\pi/2"),
@@ -920,41 +941,128 @@ if __name__ == "__main__":
         (np.pi/6, r"\pi/6"),
     ]
 
-    P_rs = {}
-    P_emu = {}
+    # -------------------------------------------------
+    # SLURM array information
+    # -------------------------------------------------
 
-    fig, axes = plt.subplots(
-        2, 2,
-        figsize=(12, 9),
-        sharex=True,
-        sharey=True
+    array_id = int(
+        os.environ["SLURM_ARRAY_TASK_ID"]
     )
 
-    axes = axes.flatten()
+    n_array_tasks = 25
 
-    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    # -------------------------------------------------
+    # Divide the complete time array among the
+    # 25 SLURM array tasks
+    #
+    # Example for 101 time points:
+    #
+    # Task 0  -> first 5 points
+    # Task 1  -> next 4 points
+    # ...
+    # Task 24 -> last 4 points
+    #
+    # This gives 101 points in total.
+    # -------------------------------------------------
 
-    for ax, (alpha, alpha_label), color in zip(
-        axes, alpha_cases, colors
-    ):
+    n_times_total = len(times)
 
-        print(f"\nCalculating alpha = {alpha_label}")
+    base = n_times_total // n_array_tasks
+    remainder = n_times_total % n_array_tasks
+
+    if array_id < remainder:
+
+        start = array_id * (base + 1)
+        end = start + (base + 1)
+
+    else:
+
+        start = (
+            remainder * (base + 1)
+            + (array_id - remainder) * base
+        )
+
+        end = start + base
+
+    my_times = times[start:end]
+
+    # -------------------------------------------------
+    # Safety check
+    # -------------------------------------------------
+
+    if len(my_times) == 0:
+        raise RuntimeError(
+            f"SLURM array task {array_id} "
+            f"received no time points."
+        )
+
+    print(
+        "\n=============================================="
+    )
+
+    print(
+        f"SLURM array task = {array_id}"
+    )
+
+    print(
+        f"Total time points = {n_times_total}"
+    )
+
+    print(
+        f"Time indices = {start} ... {end - 1}"
+    )
+
+    print(
+        f"Number of assigned time points = "
+        f"{len(my_times)}"
+    )
+
+    print(
+        f"Time range = "
+        f"{my_times[0]:.1f} ... {my_times[-1]:.1f}"
+    )
+
+    print(
+        "=============================================="
+    )
+
+    # -------------------------------------------------
+    # Store results
+    # -------------------------------------------------
+
+    rows = []
+
+    # -------------------------------------------------
+    # Loop over alpha sequentially
+    # -------------------------------------------------
+
+    for alpha, alpha_label in alpha_cases:
+
+        print(
+            f"\nTask {array_id}: "
+            f"Calculating alpha = {alpha_label}"
+        )
 
         # -------------------------------------------------
-        # Prepare jobs: ONE job = ONE time point
+        # One calculation job per time point
         # -------------------------------------------------
 
         jobs = [
             (alpha, float(t))
-            for t in times
+            for t in my_times
         ]
 
         # -------------------------------------------------
-        # Parallel calculation over time
+        # Four Python workers inside this SLURM task
+        #
+        # Therefore:
+        #
+        # 25 SLURM tasks x 4 Python workers
+        # = up to 100 simultaneous calculations
         # -------------------------------------------------
 
         with ProcessPoolExecutor(
-            max_workers=n_workers
+            max_workers=4
         ) as executor:
 
             output = list(
@@ -965,78 +1073,115 @@ if __name__ == "__main__":
             )
 
         # -------------------------------------------------
-        # Restore original time ordering
+        # Restore time ordering
         # -------------------------------------------------
 
-        output.sort(key=lambda x: x[0])
-
-        times_result = np.array(
-            [x[0] for x in output]
-        )
-
-        P_rs[alpha_label] = np.array(
-            [x[1] for x in output]
-        )
-
-        P_emu[alpha_label] = np.array(
-            [x[2] for x in output]
+        output.sort(
+            key=lambda x: x[0]
         )
 
         # -------------------------------------------------
-        # Plot
+        # Store results in rows
         # -------------------------------------------------
 
-        x, xlabel = get_plot_time()
+        for t, P_rs_value, P_analytic_value in output:
 
-        ax.plot(
-            x,
-            P_rs[alpha_label],
-            "--o",
-            color=color,
-            label="Raffelt-Sigl"
-        )
-
-        ax.plot(
-            x,
-            P_emu[alpha_label],
-            "-",
-            lw=2,
-            color=color,
-            label="Analytical"
-        )
-
-        ax.set_title(
-            rf"$\alpha={alpha_label}$"
-        )
-
-        ax.grid(True)
-        ax.legend()
+            rows.append(
+                {
+                    "time": t,
+                    "alpha": alpha,
+                    "P_RS": P_rs_value,
+                    "P_analytic": P_analytic_value,
+                }
+            )
 
     # -----------------------------------------------------
-    # Figure labels
+    # Convert results to DataFrame
     # -----------------------------------------------------
 
-    fig.supxlabel(xlabel)
-
-    fig.supylabel(
-        r"$\langle P(\nu_e\to\nu_\mu)\rangle_{N_e}$"
+    df = pd.DataFrame(
+        rows,
+        columns=[
+            "time",
+            "alpha",
+            "P_RS",
+            "P_analytic",
+        ]
     )
 
-    fig.suptitle(
-        rf"$N_e={Ne}$, $N_x={Nx}$",
-        fontsize=15
+    # -----------------------------------------------------
+    # Sort by alpha and time
+    # -----------------------------------------------------
+
+    df.sort_values(
+        by=["alpha", "time"],
+        inplace=True
     )
 
-    plt.tight_layout(
-        rect=[0, 0, 1, 0.96]
+    # -----------------------------------------------------
+    # Create output directory
+    # -----------------------------------------------------
+
+    output_dir = "output"
+
+    os.makedirs(
+        output_dir,
+        exist_ok=True
     )
 
-    filename = f"Analytic_vsRS_Ne{Ne}_Nx{Nx}.png"
+    # -----------------------------------------------------
+    # Filename based on actual time range
+    # -----------------------------------------------------
 
-    plt.savefig(
-        filename,
-        dpi=300,
-        bbox_inches="tight"
+    t_start = my_times[0]
+    t_end = my_times[-1]
+
+    output_filename = os.path.join(
+        output_dir,
+        f"Analytic_vsRS_Ne{Ne}_Nx{Nx}"
+        f"_t{t_start:.1f}-{t_end:.1f}.csv"
+    )
+
+    # -----------------------------------------------------
+    # Save CSV
+    # -----------------------------------------------------
+
+    df.to_csv(
+        output_filename,
+        index=False
+    )
+
+    # -----------------------------------------------------
+    # Print summary
+    # -----------------------------------------------------
+
+    print(
+        "\n=============================================="
+    )
+
+    print(
+        f"Task {array_id} completed."
+    )
+
+    print(
+        f"Time range = "
+        f"{t_start:.1f} to {t_end:.1f}"
+    )
+
+    print(
+        f"Rows written = {len(df)}"
+    )
+
+    print(
+        f"Results saved to:"
+    )
+
+    print(
+        output_filename
+    )
+
+    print(
+        "=============================================="
     )
 
 
