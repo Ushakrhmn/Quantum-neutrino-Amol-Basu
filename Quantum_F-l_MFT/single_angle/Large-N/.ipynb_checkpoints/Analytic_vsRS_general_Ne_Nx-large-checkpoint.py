@@ -21,48 +21,51 @@
 # 
 # To check \(N_e=2\) later, change only `Ne` in Cell 1.
 
-# In[1]:
+# In[13]:
 
 
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.integrate as integ
 
-from scipy.special import gammaln
-from sympy.physics.wigner import clebsch_gordan
-from sympy import S as sympy_S
-
-from concurrent.futures import ProcessPoolExecutor
-import os
+from qiskit import QuantumCircuit, transpile
+from qiskit_aer import AerSimulator
+from qiskit.quantum_info import SparsePauliOp
+from qiskit_ibm_runtime import QiskitRuntimeService, EstimatorV2 as Estimator
 
 
-# In[2]:
+# In[14]:
 
 
 import argparse
 
 parser = argparse.ArgumentParser(
-    description="Raffelt-Sigl vs analytical neutrino oscillation calculation"
+    description="Many-body vs Random-Phase neutrino oscillation simulation"
 )
 
 parser.add_argument(
     "--Ne",
     type=int,
-    required=True,
     help="Number of initially electron-flavor neutrinos",
 )
 
 parser.add_argument(
     "--Nx",
     type=int,
-    required=True,
     help="Number of initially x-flavor neutrinos",
 )
 
-args = parser.parse_args()
+args, _ = parser.parse_known_args()
 
-Ne = args.Ne
-Nx = args.Nx
+if args.Ne is None:
+    Ne = int(input("Enter the number of electron-flavor neutrinos (Ne): "))
+else:
+    Ne = args.Ne
+
+if args.Nx is None:
+    Nx = int(input("Enter the number of x-flavor neutrinos (Nx): "))
+else:
+    Nx = args.Nx
 
 N = Ne + Nx
 
@@ -70,12 +73,17 @@ if Ne < 1 or Nx < 1:
     raise ValueError("Ne and Nx must be positive integers.")
 
 
-# In[3]:
+# In[15]:
 
 
 # =============================
 # CELL 1: Imports and parameters
 # =============================
+
+# -----------------------------
+# Particle numbers
+# -----------------------------
+
 
 # -----------------------------
 # Physics parameters
@@ -98,23 +106,27 @@ mu = 1
 # -----------------------------
 # Evolution choices
 # -----------------------------
-# Self-interaction only
+# Keep these False to match the later cells of the old e1_x15 notebook:
+# self-interaction only, with no vacuum and no matter term.
 use_vacuum = False
 use_matter = False
 
 # -----------------------------
-# Time parameters
+# Time / Trotter / sampling parameters
 # -----------------------------
 dt = 0.01
-T_max = 10.0
-sample_every = 10
+T_max = 10 #200.0
+sample_every = 100
 
 n_steps_max = int(round(T_max / dt))
-times = np.arange(
-    0,
-    n_steps_max + 1,
-    sample_every
-) * dt
+times = np.arange(0, n_steps_max + 1, sample_every) * dt
+
+# -----------------------------
+# Qiskit simulation parameters
+# -----------------------------
+shots = 4096
+seed_simulator = 12345
+backend = AerSimulator(seed_simulator=seed_simulator)
 
 # -----------------------------
 # Alpha cases
@@ -127,31 +139,14 @@ alpha_cases = [
     (0.0,     r"0"),
 ]
 
-# -----------------------------
-# SLURM CPU information
-# -----------------------------
-n_workers = int(
-    os.environ.get(
-        "SLURM_CPUS_PER_TASK",
-        os.cpu_count()
-    )
-)
-
 print(f"Using Ne = {Ne}, Nx = {Nx}, total N = {N}")
 print(f"omega1 = {omega1}")
 print(f"mu = omega1 * N = {mu}")
-print(
-    f"Number of sampled times = {len(times)}, "
-    f"T_max = {T_max}, dt = {dt}"
-)
-print(
-    f"Evolution mode: self-interaction only = "
-    f"{not use_vacuum and not use_matter}"
-)
-print(f"Parallel workers = {n_workers}")
+print(f"Number of sampled times = {len(times)}, T_max = {T_max}, dt = {dt}")
+print(f"Evolution mode: self-interaction only = {not use_vacuum and not use_matter}")
 
 
-# In[4]:
+# In[16]:
 
 
 # =======================================
@@ -166,7 +161,49 @@ J=1
 #print("J min/max =", J.min(), J.max())
 
 
-# In[6]:
+# In[17]:
+
+
+# =========================================
+# CELL 3: Qiskit evolution building blocks
+# =========================================
+
+def add_vacuum_evolution(qc, n, bx, by, bz, N):
+    """
+    Add n first-order vacuum steps to the circuit.
+
+    This function is retained for completeness, but use_vacuum=False by default
+    to match the old e1_x15 comparison.
+    """
+    for _ in range(n):
+        for q in range(N):
+            qc.rx(2.0 * bx, q)
+            qc.ry(2.0 * by, q)
+            qc.rz(2.0 * bz, q)
+
+
+def add_interaction_evolution(qc, n, J, N, dt):
+    """
+    Add n first-order interaction steps to the circuit.
+
+    For each pair (i,j), apply approximately
+
+        exp[-i Jij dt (XX + YY + ZZ)]
+
+    using
+
+        RXX(2 Jij dt) RYY(2 Jij dt) RZZ(2 Jij dt).
+    """
+    for _ in range(n):
+        for i in range(N):
+            for j in range(i + 1, N):
+                phi = 2.0 * J* dt
+                qc.rxx(phi, i, j)
+                qc.ryy(phi, i, j)
+                qc.rzz(phi, i, j)
+
+
+# In[18]:
 
 
 # ============================================
@@ -255,12 +292,6 @@ def P_osc_RS(t_table, theta, omega, lam, J, initial_flavors=None, alpha=None):
 
         return res
 
-   # return integ.solve_ivp(
-   #     rhs,
-   #     (t_table[0], t_table[-1]),
-   #     ini_state.T.flatten(),
-   #     t_eval=t_table,
-   # )
     return integ.solve_ivp(
         rhs,
         (t_table[0], t_table[-1]),
@@ -272,7 +303,100 @@ def P_osc_RS(t_table, theta, omega, lam, J, initial_flavors=None, alpha=None):
     )
 
 
-# In[8]:
+# In[19]:
+
+
+# =====================================================
+# CELL 5: Many-body Qiskit solver for Ne + Nx(alpha)
+# =====================================================
+
+def prepare_initial_circuit(Ne, Nx, alpha):
+    """
+    Prepare the initial many-body state:
+
+        first Ne qubits: |nu_e> = |0>
+        next  Nx qubits: |nu_x(alpha)> = cos(alpha)|0> + sin(alpha)|1>
+
+    RY(2 alpha)|0> = cos(alpha)|0> + sin(alpha)|1>.
+
+    For alpha = pi/2, the Nx group is exactly |1>, reproducing
+    the old 1 nu_e + 15 nu_mu setup when Ne=1, Nx=15.
+    """
+    N = Ne + Nx
+    qc0 = QuantumCircuit(N, N)
+
+    # First Ne qubits are |nu_e> = |0>, so no gate is needed.
+    for q in range(Ne, N):
+        qc0.ry(2.0 * alpha, q)
+
+    return qc0
+
+
+def run_many_body_qiskit(alpha, Ne, Nx, J, times, dt, shots, backend,
+                         use_vacuum=False, bx=0.0, by=0.0, bz=0.0,
+                         verbose=True):
+    """
+    Run the many-body Qiskit simulation for a given alpha.
+
+    Output
+    ------
+    P_bit1[q, k] :
+        Probability that qubit q is measured as |1> at time times[k].
+
+    For the first Ne qubits, which start as |nu_e>=|0>,
+        P_bit1 = P(nu_e -> nu_mu).
+
+    The plotted observable is the Ne-average:
+        <P(nu_e -> nu_mu)> over the initially electron-flavor group.
+    """
+    N = Ne + Nx
+    qc0 = prepare_initial_circuit(Ne, Nx, alpha)
+
+    P_bit1 = [[] for _ in range(N)]
+
+    for t in times:
+        n = int(round(t / dt))
+        qc = qc0.copy()
+
+        #if use_vacuum:
+            #add_vacuum_evolution(qc, n=n, bx=bx, by=by, bz=bz, N=N)
+
+        add_interaction_evolution(qc, n=n, J=J, N=N, dt=dt)
+
+        qc.measure(range(N), range(N))
+
+        tqc = transpile(qc, backend, optimization_level=0)
+        counts = backend.run(tqc, shots=shots).result().get_counts()
+
+        p1_t = [0.0] * N
+
+        for bitstring, c in counts.items():
+            prob = c / shots
+
+            for q in range(N):
+                # Qiskit displays bitstrings with the highest classical bit first.
+                bit_q = int(bitstring[-1 - q])
+                if bit_q == 1:
+                    p1_t[q] += prob
+
+        for q in range(N):
+            P_bit1[q].append(p1_t[q])
+
+        if verbose:
+            print(
+                f"alpha={alpha:.6f}, t={t:8.3f}: "
+                f"<P_e_to_mu>_MB = {np.mean(p1_t[:Ne]):.5f}"
+            )
+
+    P_bit1 = np.array(P_bit1)
+
+    return {
+        "P_bit1": P_bit1,
+        "P_e_to_mu_avg": np.mean(P_bit1[:Ne, :], axis=0),
+    }
+
+
+# In[20]:
 
 
 # =====================================================
@@ -330,6 +454,167 @@ def run_rs_mean_field(alpha, Ne, Nx, J, times,
     }
 
 
+def run_alpha_case(alpha, verbose=True):
+    """
+    Run both many-body Qiskit and RS mean-field for one alpha.
+    """
+    N = Ne + Nx
+    J = 1
+
+    mb = run_many_body_qiskit(
+        alpha=alpha,
+        Ne=Ne,
+        Nx=Nx,
+        J=J,
+        times=times,
+        dt=dt,
+        shots=shots,
+        backend=backend,
+        use_vacuum=use_vacuum,
+        bx=bx,
+        by=by,
+        bz=bz,
+        verbose=verbose,
+    )
+
+    rs = run_rs_mean_field(
+        alpha=alpha,
+        Ne=Ne,
+        Nx=Nx,
+        J=J,
+        times=times,
+        use_vacuum=use_vacuum,
+        use_matter=use_matter,
+    )
+
+    return {
+        "alpha": alpha,
+        "Ne": Ne,
+        "Nx": Nx,
+        "many_body": mb,
+        "rs": rs,
+    }
+
+
+# In[21]:
+
+
+# =====================================================
+# CELL 7: Plotting helpers
+# =====================================================
+
+results = {}
+
+# Choose the x-axis used in all plots.
+# Options:
+#     "t"    : physical notebook time
+#     "t_mu" : dimensionless t*mu
+plot_time_axis = "t"
+
+
+def get_plot_time():
+    if plot_time_axis == "t":
+        return times, r"Total time"
+    elif plot_time_axis == "t_mu":
+        return times , r"$t\mu$"
+    else:
+        raise ValueError("plot_time_axis must be either 't' or 't_mu'.")
+
+
+def run_and_plot_alpha(alpha, alpha_label, fig_no=None, verbose=True, show_plot=True):
+    """
+    Run one alpha case and optionally plot the average conversion probability
+    of the initially electron-flavor group.
+    """
+    key = alpha_label
+    result = run_alpha_case(alpha, verbose=verbose)
+    results[key] = result
+
+    if show_plot:
+        P_mb = result["many_body"]["P_e_to_mu_avg"]
+        P_rs = result["rs"]["P_e_to_mu_avg"]
+
+        x, xlabel = get_plot_time()
+
+        plt.figure(figsize=(9, 5.5))
+
+        plt.plot(
+            x,
+            P_mb,
+            marker="o",
+            linestyle="dashed",
+            label=rf"Many-body Qiskit, $\alpha={alpha_label}$",
+        )
+
+        plt.plot(
+            x,
+            P_rs,
+            linestyle="-",
+            linewidth=2,
+            label=rf"RS mean field, $\alpha={alpha_label}$",
+        )
+
+        plt.xlabel(xlabel)
+        plt.ylabel(r"$\langle P(\nu_e\to\nu_\mu)\rangle_{N_e}$")
+
+        if fig_no is None:
+            plt.title(
+                rf"$N_e={Ne}$, $N_x={Nx}$, "
+                rf"$\nu_x=\cos\alpha\,\nu_e+\sin\alpha\,\nu_\mu$"
+            )
+        else:
+            plt.title(
+                rf"Fig. {fig_no}: $N_e={Ne}$, $N_x={Nx}$, "
+                rf"$\nu_x=\cos\alpha\,\nu_e+\sin\alpha\,\nu_\mu$"
+            )
+
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+    return result
+
+
+# In[22]:
+
+
+# =====================================================
+# IBM circuit construction
+# =====================================================
+
+def build_ibm_circuit(alpha, Ne, Nx, J, t, dt):
+    """
+    Build the same many-body circuit used by the Qiskit simulation,
+    but without measurements.
+
+    EstimatorV2 evaluates expectation values directly.
+    """
+    N = Ne + Nx
+
+    qc = prepare_initial_circuit(Ne, Nx, alpha)
+
+    n = int(round(t / dt))
+
+    if use_vacuum:
+        add_vacuum_evolution(
+            qc,
+            n=n,
+            bx=bx,
+            by=by,
+            bz=bz,
+            N=N,
+        )
+
+    add_interaction_evolution(
+        qc,
+        n=n,
+        J=J,
+        N=N,
+        dt=dt,
+    )
+
+    return qc
 
 
 # In[ ]:
@@ -360,7 +645,7 @@ def run_rs_mean_field(alpha, Ne, Nx, J, times,
 
 
 
-# In[11]:
+# In[23]:
 
 
 import numpy as np
@@ -859,185 +1144,110 @@ def collective_oscillation_probability(
     return Nmu / N1
 
 
-# In[12]:
-
-
-def calculate_one_time_point(args):
-
-    alpha, t = args
-
-    # -------------------------------------------------
-    # RS mean-field
-    # -------------------------------------------------
-
-    if t == 0.0:
-
-        P_rs = 0.0
-
-    else:
-
-        result_rs = run_rs_mean_field(
-            alpha=alpha,
-            Ne=Ne,
-            Nx=Nx,
-            J=J,
-            times=np.array([0.0, t]),
-            use_vacuum=use_vacuum,
-            use_matter=use_matter,
-        )
-
-        P_rs = result_rs["P_e_to_mu_avg"][-1]
-
-    # -------------------------------------------------
-    # Analytical result
-    # -------------------------------------------------
-
-    P_analytic = collective_oscillation_probability(
-        N1=Ne,
-        N2=Nx,
-        alpha=alpha,
-        t=t,
-        lam=J,
-    )
-
-    return t, P_rs, float(P_analytic)
-
-
-# In[13]:
+# In[ ]:
 
 
 # =====================================================
 # CELL 7: Compare RS mean field with analytical result
-# Time points are calculated in parallel
+# for all alpha cases
 # =====================================================
 
-if __name__ == "__main__":
+alpha_cases = [
+    (np.pi/2, r"\pi/2"),
+    (np.pi/3, r"\pi/3"),
+    (np.pi/4, r"\pi/4"),
+    (np.pi/6, r"\pi/6"),
+]
 
-    alpha_cases = [
-        (np.pi/2, r"\pi/2"),
-        (np.pi/3, r"\pi/3"),
-        (np.pi/4, r"\pi/4"),
-        (np.pi/6, r"\pi/6"),
-    ]
+P_rs = {}
+P_emu = {}
 
-    P_rs = {}
-    P_emu = {}
+fig, axes = plt.subplots(
+    2, 2,
+    figsize=(12, 9),
+    sharex=True,
+    sharey=True
+)
+axes = axes.flatten()
 
-    fig, axes = plt.subplots(
-        2, 2,
-        figsize=(12, 9),
-        sharex=True,
-        sharey=True
+colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+
+for ax, (alpha, alpha_label), color in zip(
+    axes, alpha_cases, colors
+):
+
+    # -------------------------------------------------
+    # Raffelt-Sigl mean-field solution
+    # -------------------------------------------------
+    result_rs = run_rs_mean_field(
+        alpha=alpha,
+        Ne=Ne,
+        Nx=Nx,
+        J=J,
+        times=times,
+        use_vacuum=use_vacuum,
+        use_matter=use_matter,
     )
 
-    axes = axes.flatten()
+    # Average P(nu_e -> nu_mu) over the initial nu_e modes
+    P_rs[alpha_label] = result_rs["P_e_to_mu_avg"]
 
-    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-
-    for ax, (alpha, alpha_label), color in zip(
-        axes, alpha_cases, colors
-    ):
-
-        print(f"\nCalculating alpha = {alpha_label}")
-
-        # -------------------------------------------------
-        # Prepare jobs: ONE job = ONE time point
-        # -------------------------------------------------
-
-        jobs = [
-            (alpha, float(t))
-            for t in times
-        ]
-
-        # -------------------------------------------------
-        # Parallel calculation over time
-        # -------------------------------------------------
-
-        with ProcessPoolExecutor(
-            max_workers=n_workers
-        ) as executor:
-
-            output = list(
-                executor.map(
-                    calculate_one_time_point,
-                    jobs
-                )
-            )
-
-        # -------------------------------------------------
-        # Restore original time ordering
-        # -------------------------------------------------
-
-        output.sort(key=lambda x: x[0])
-
-        times_result = np.array(
-            [x[0] for x in output]
-        )
-
-        P_rs[alpha_label] = np.array(
-            [x[1] for x in output]
-        )
-
-        P_emu[alpha_label] = np.array(
-            [x[2] for x in output]
-        )
-
-        # -------------------------------------------------
-        # Plot
-        # -------------------------------------------------
-
-        x, xlabel = get_plot_time()
-
-        ax.plot(
-            x,
-            P_rs[alpha_label],
-            "--o",
-            color=color,
-            label="Raffelt-Sigl"
-        )
-
-        ax.plot(
-            x,
-            P_emu[alpha_label],
-            "-",
-            lw=2,
-            color=color,
-            label="Analytical"
-        )
-
-        ax.set_title(
-            rf"$\alpha={alpha_label}$"
-        )
-
-        ax.grid(True)
-        ax.legend()
-
-    # -----------------------------------------------------
-    # Figure labels
-    # -----------------------------------------------------
-
-    fig.supxlabel(xlabel)
-
-    fig.supylabel(
-        r"$\langle P(\nu_e\to\nu_\mu)\rangle_{N_e}$"
+    # -------------------------------------------------
+    # Analytical collective-oscillation result
+    # -------------------------------------------------
+    P = collective_oscillation_probability(
+        N1=Ne,
+        N2=Nx,
+        alpha=alpha,
+        t=times,
+        lam=J
     )
 
-    fig.suptitle(
-        rf"$N_e={Ne}$, $N_x={Nx}$",
-        fontsize=15
+    P_emu[alpha_label] = P
+
+    # -------------------------------------------------
+    # Plotting time variable
+    # -------------------------------------------------
+    x, xlabel = get_plot_time()
+
+    ax.plot(
+        x,
+        P_rs[alpha_label],
+        "--o",
+        color=color,
+        label="Raffelt-Sigl"
     )
 
-    plt.tight_layout(
-        rect=[0, 0, 1, 0.96]
+    ax.plot(
+        x,
+        P_emu[alpha_label],
+        "-",
+        lw=2,
+        color=color,
+        label="Analytical"
     )
 
-    filename = f"Analytic_vsRS_Ne{Ne}_Nx{Nx}.png"
-
-    plt.savefig(
-        filename,
-        dpi=300,
-        bbox_inches="tight"
-    )
+    ax.set_title(rf"$\alpha={alpha_label}$")
+    ax.grid(True)
+    ax.legend()
 
 
-# # 
+# -----------------------------------------------------
+# Figure labels
+# -----------------------------------------------------
+fig.supxlabel(xlabel)
+fig.supylabel(
+    r"$\langle P(\nu_e\to\nu_\mu)\rangle_{N_e}$"
+)
+
+fig.suptitle(
+    rf"$N_e={Ne}$, $N_x={Nx}$",
+    fontsize=15
+)
+
+plt.tight_layout(rect=[0, 0, 1, 0.96])
+#plt.show()
+# plt.show()   # don't need this on Compute
+filename = f"Analytic_vsRS_Ne{Ne}_Nx{Nx}.png"
+plt.savefig(filename, dpi=300, bbox_inches="tight")
+# ## 
